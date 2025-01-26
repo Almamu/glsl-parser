@@ -340,6 +340,12 @@ astDefineIdentifier::astDefineIdentifier(astDefineStatement *define)
 {
 }
 
+astUnknownIdentifier::astUnknownIdentifier(char* name)
+    : astExpression(astExpression::kUnknownIdentifier)
+    , define(name)
+{
+}
+
 astFieldOrSwizzle::astFieldOrSwizzle()
     : astExpression(kFieldOrSwizzle)
     , operand(0)

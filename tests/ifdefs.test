@@ -31,3 +31,7 @@ float third = testvalue;
 void thirdtest() {
 }
 #endif
+#ifdef UNDEFINED
+void testing123() {
+}
+#endif

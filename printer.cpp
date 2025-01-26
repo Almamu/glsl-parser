@@ -212,6 +212,10 @@ namespace glsl {
         printf("%s", expression->define->name);
     }
 
+    static void printUnknownIdentifier(astUnknownIdentifier *expression) {
+        printf("%s", expression->define);
+    }
+
     static void printFieldOrSwizzle(astFieldOrSwizzle *expression) {
         printExpression(expression->operand);
         print(".%s", expression->name);
@@ -347,6 +351,8 @@ namespace glsl {
                 return printVariableIdentifier((astVariableIdentifier*)expression);
             case astExpression::kDefineIdentifier:
                 return printDefineIdentifier((astDefineIdentifier*)expression);
+            case astExpression::kUnknownIdentifier:
+                return printUnknownIdentifier((astUnknownIdentifier*)expression);
             case astExpression::kFieldOrSwizzle:
                 return printFieldOrSwizzle((astFieldOrSwizzle*)expression);
             case astExpression::kArraySubscript:

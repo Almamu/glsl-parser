@@ -36,3 +36,7 @@ void thirdtest() {
 
 }
 #endif
+
+#ifdef UNDEFINED
+void testing123() {}
+#endif

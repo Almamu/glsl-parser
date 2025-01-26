@@ -412,6 +412,7 @@ struct astExpression : astNode<astExpression> {
         kBoolConstant,
         kVariableIdentifier,
         kDefineIdentifier,
+        kUnknownIdentifier,
         kFieldOrSwizzle,
         kArraySubscript,
         kFunctionCall,
@@ -465,6 +466,11 @@ struct astVariableIdentifier : astExpression {
 struct astDefineIdentifier : astExpression {
     astDefineIdentifier(astDefineStatement *define);
     astDefineStatement *define;
+};
+
+struct astUnknownIdentifier : astExpression {
+    astUnknownIdentifier(char *define);
+    char *define;
 };
 
 struct astFieldOrSwizzle : astExpression {

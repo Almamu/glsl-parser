@@ -106,10 +106,10 @@ protected:
     CHECK_RETURN astFunctionCall *parseFunctionCall();
 
     // Expression parsers
-    CHECK_RETURN astExpression *parseExpression(endCondition end);
-    CHECK_RETURN astExpression *parseUnary(endCondition end);
+    CHECK_RETURN astExpression *parseExpression(endCondition end, bool allow_undefined = false);
+    CHECK_RETURN astExpression *parseUnary(endCondition end, bool allow_undefined = false);
     CHECK_RETURN astExpression *parseBinary(int lhsPrecedence, astExpression *lhs, endCondition condition);
-    CHECK_RETURN astExpression *parseUnaryPrefix(endCondition end);
+    CHECK_RETURN astExpression *parseUnaryPrefix(endCondition end, bool allow_undefined = false);
     CHECK_RETURN astConstantExpression *parseArraySize();
 
     // Statement parsers

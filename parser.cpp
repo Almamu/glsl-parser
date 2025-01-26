@@ -405,7 +405,7 @@ CHECK_RETURN astTU *parser::parse(int type, astTU* parent) {
                     return 0;
                 }
 
-                m_ast->elseDirective->value = parseExpression(kEndConditionLineFeed);
+                m_ast->elseDirective->value = parseExpression(kEndConditionLineFeed, true);
                 astTU* previous = m_ast;
                 m_ast->elseDirective->thenStatement = parse(m_ast->type, m_ast);
                 m_ast = previous;
@@ -1130,7 +1130,7 @@ CHECK_RETURN astExpression *parser::parseBinary(int lhsPrecedence, astExpression
     return lhs;
 }
 
-CHECK_RETURN astExpression *parser::parseUnaryPrefix(endCondition condition) {
+CHECK_RETURN astExpression *parser::parseUnaryPrefix(endCondition condition, bool allow_undefined) {
     if (isOperator(kOperator_paranthesis_begin)) {
         if (!next()) return 0; // skip '('
         return parseExpression(kEndConditionParanthesis);
@@ -1169,6 +1169,8 @@ CHECK_RETURN astExpression *parser::parseUnaryPrefix(endCondition condition) {
             astDefineStatement* define = findDefine(m_token.asIdentifier);
             if (define)
                 return GC_NEW(astExpression) astDefineIdentifier(define);
+            if (allow_undefined)
+                return GC_NEW(astExpression) astUnknownIdentifier(strnew(m_token.asIdentifier));
             fatal("`%s' was not declared in this scope", m_token.asIdentifier);
             return 0;
         }
@@ -1214,8 +1216,8 @@ astType* parser::getType(astExpression *expression)
     return 0;
 }
 
-CHECK_RETURN astExpression *parser::parseUnary(endCondition end) {
-    astExpression *operand = parseUnaryPrefix(end);
+CHECK_RETURN astExpression *parser::parseUnary(endCondition end, bool allow_undefined) {
+    astExpression *operand = parseUnaryPrefix(end, allow_undefined);
     if (!operand)
         return 0;
     for (;;) {
@@ -1296,8 +1298,8 @@ CHECK_RETURN astExpression *parser::parseUnary(endCondition end) {
     return operand;
 }
 
-CHECK_RETURN astExpression *parser::parseExpression(endCondition condition) {
-    astExpression *lhs = parseUnary(condition);
+CHECK_RETURN astExpression *parser::parseExpression(endCondition condition, bool allow_undefined) {
+    astExpression *lhs = parseUnary(condition, allow_undefined);
     if (!lhs)
         return 0;
     if (!next(!(condition & kEndConditionLineFeed))) // skip last
@@ -1713,7 +1715,7 @@ CHECK_RETURN astIfDirectiveStatement* parser::parseIfDirective() {
             return 0;
         }
 
-        ifDef->value = parseExpression(kEndConditionLineFeed);
+        ifDef->value = parseExpression(kEndConditionLineFeed, true);
 
         if (!ifDef->value) {
             return 0;
@@ -1759,7 +1761,7 @@ CHECK_RETURN astIfDefDirectiveStatement* parser::parseIfDefDirective() {
             return 0;
         }
 
-        ifDef->define = parseExpression(kEndConditionLineFeed);
+        ifDef->define = parseExpression(kEndConditionLineFeed, true);
 
         if (!ifDef->define) {
             return 0;
@@ -1805,7 +1807,7 @@ CHECK_RETURN astIfNDefDirectiveStatement* parser::parseIfNDefDirective() {
             return 0;
         }
 
-        ifndef->define = parseExpression(kEndConditionLineFeed);
+        ifndef->define = parseExpression(kEndConditionLineFeed, true);
 
         if (!ifndef->define) {
             return 0;
