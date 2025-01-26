@@ -1049,13 +1049,13 @@ CHECK_RETURN astExpression *parser::parseBinary(int lhsPrecedence, astExpression
             break;
 
         astBinaryExpression *expression = createExpression();
-        if (!next())
+        if (!next(!(end & kEndConditionLineFeed)))
             return 0;
 
         astExpression *rhs = parseUnary(end);
         if (!rhs)
             return 0;
-        if (!next())
+        if (!next(!(end & kEndConditionLineFeed)))
             return 0;
 
         if (((astExpression*)expression)->type == astExpression::kAssign) {
@@ -1127,7 +1127,7 @@ CHECK_RETURN astExpression *parser::parseUnaryPrefix(endCondition condition) {
     } else if (isBuiltin()) {
         return parseConstructorCall();
     } else if (isType(kType_identifier)) {
-        token peek = m_lexer.peek();
+        token peek = m_lexer.peek(!(condition & kEndConditionLineFeed));
         if (IS_OPERATOR(peek, kOperator_paranthesis_begin)) {
             astType *type = findType(m_token.asIdentifier);
             if (type)
@@ -1191,7 +1191,7 @@ CHECK_RETURN astExpression *parser::parseUnary(endCondition end) {
     if (!operand)
         return 0;
     for (;;) {
-        token peek = m_lexer.peek();
+        token peek = m_lexer.peek(!(end & kEndConditionLineFeed));
         if (IS_OPERATOR(peek, kOperator_dot)) {
             if (!next()) return 0; // skip last
             if (!next()) return 0; // skip '.'
@@ -1272,7 +1272,7 @@ CHECK_RETURN astExpression *parser::parseExpression(endCondition condition) {
     astExpression *lhs = parseUnary(condition);
     if (!lhs)
         return 0;
-    if (!next()) // skip last
+    if (!next(!(condition & kEndConditionLineFeed))) // skip last
         return 0;
     return parseBinary(0, lhs, condition);
 }
@@ -1660,7 +1660,7 @@ CHECK_RETURN astDefineStatement* parser::parseDefineDirective() {
             return define;
         }
 
-        if (!next()) {
+        if (!next(false)) {
             return 0;
         }
 
