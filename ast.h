@@ -23,9 +23,24 @@ struct astMemory {
     }
 };
 
+struct astBase {
+    enum {
+        kType,
+        kVariable,
+        kLayoutQualifier,
+        kFunction,
+        kDeclaration,
+        kStatement,
+        kExpression,
+    };
+    astBase(int type);
+    int astType;
+};
+
 // Nodes are to inherit from astNode or astCollector
 template <typename T>
-struct astNode {
+struct astNode : astBase {
+    astNode(int type) : astBase(type) {}
     void *operator new(size_t size, vector<astMemory> *collector) throw() {
         void *data = malloc(size);
         if (data)
@@ -50,9 +65,6 @@ struct astVersionDirective;
 struct astExtensionDirective;
 struct astVariable;
 struct astDefineStatement;
-struct astIfDefDirectiveStatement;
-struct astIncludeStatement;
-struct astIfDirectiveStatement;
 struct astElseDirectiveStatement;
 
 struct astTU {
@@ -79,14 +91,24 @@ struct astTU {
     vector<astInterfaceBlock*> interfaceBlocks;
     astTU* parent;
 
+    // nodes as read off the file
+    vector<astBase*> nodes;
+
 private:
     astTU(const astTU&);
     astTU &operator=(const astTU&);
 };
 
 struct astType : astNode<astType> {
-    astType(bool builtin);
-    bool builtin;
+    enum {
+        kBuiltin,
+        kStruct,
+        kInterfaceBlock,
+        kVersionDirective,
+        kExtensionDirective
+    };
+    astType(int type);
+    int typeType;
 };
 
 struct astBuiltin : astType {
@@ -136,7 +158,7 @@ struct astVariable : astNode<astVariable> {
     };
     astVariable(int type);
     char *name;
-    astType *baseType;
+    struct astType *baseType;
     bool isArray;
     bool isPrecise;
     int type;
@@ -212,7 +234,7 @@ struct astLayoutQualifier : astNode<astLayoutQualifier> {
 
 struct astFunction : astNode<astFunction> {
     astFunction();
-    astType *returnType;
+    struct astType *returnType;
     char *name;
     vector<astFunctionParameter*> parameters;
     vector<astStatement*> statements;
@@ -246,6 +268,8 @@ struct astStatement : astNode<astStatement> {
         kIfDirective,
         kElseDirective,
         kIfDefDirective,
+        kIfNDefDirective,
+        kEndIfDirective,
     };
     int type;
     const char *name() const;
@@ -281,14 +305,22 @@ struct astIfDefDirectiveStatement : astStatement {
     astIfDefDirectiveStatement();
     astExpression* define;
     astTU *thenStatement;
-    astTU *elseStatement;
+};
+
+struct astIfNDefDirectiveStatement : astStatement {
+    astIfNDefDirectiveStatement();
+    astExpression* define;
+    astTU *thenStatement;
 };
 
 struct astIfDirectiveStatement : astStatement {
     astIfDirectiveStatement();
     astExpression* value;
     astTU *thenStatement;
-    astTU *elseStatement;
+};
+
+struct astEndIfDirectiveStatement : astSimpleStatement {
+    astEndIfDirectiveStatement();
 };
 
 struct astEmptyStatement : astSimpleStatement {
@@ -455,7 +487,7 @@ struct astFunctionCall : astExpression {
 
 struct astConstructorCall : astExpression {
     astConstructorCall();
-    astType *type;
+    struct astType *type;
     vector<astExpression*> parameters;
 };
 

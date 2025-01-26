@@ -131,6 +131,7 @@ protected:
 
     CHECK_RETURN astDefineStatement* parseDefineDirective();
     CHECK_RETURN astIfDefDirectiveStatement* parseIfDefDirective();
+    CHECK_RETURN astIfNDefDirectiveStatement* parseIfNDefDirective();
     CHECK_RETURN astIfDirectiveStatement* parseIfDirective();
     CHECK_RETURN astStatement *parseDirective();
 

@@ -329,17 +329,20 @@ CHECK_RETURN astTU *parser::parse(int type, astTU* parent) {
                 directive->version = m_token.asDirective.asVersion.version;
                 directive->type = m_token.asDirective.asVersion.type;
                 m_ast->versionDirective = directive;
+                m_ast->nodes.push_back(directive);
                 continue;
             } else if (m_token.asDirective.type == directive::kExtension) {
                 astExtensionDirective *extension = GC_NEW(astExtensionDirective) astExtensionDirective();
                 extension->behavior = m_token.asDirective.asExtension.behavior;
                 extension->name = strnew(m_token.asDirective.asExtension.name);
                 m_ast->extensionDirectives.push_back(extension);
+                m_ast->nodes.push_back(extension);
                 continue;
             } else if (m_token.asDirective.type == directive::kInclude) {
                 astIncludeStatement* include = GC_NEW(astIncludeStatement) astIncludeStatement();
                 include->name = strnew(m_token.asDirective.asInclude.file);
                 m_ast->statements.push_back(include);
+                m_ast->nodes.push_back(include);
                 continue;
             } else if (m_token.asDirective.type == directive::kDefine) {
                 astDefineStatement* define = parseDefineDirective();
@@ -349,6 +352,7 @@ CHECK_RETURN astTU *parser::parse(int type, astTU* parent) {
                 }
 
                 m_ast->statements.push_back(define);
+                m_ast->nodes.push_back(define);
                 continue;
             } else if (m_token.asDirective.type == directive::kIfDef) {
                 astIfDefDirectiveStatement *ifdef = parseIfDefDirective();
@@ -358,6 +362,17 @@ CHECK_RETURN astTU *parser::parse(int type, astTU* parent) {
                 }
 
                 m_ast->statements.push_back(ifdef);
+                m_ast->nodes.push_back(ifdef);
+                continue;
+            } else if (m_token.asDirective.type == directive::kIfNDef) {
+                astIfNDefDirectiveStatement *ifndef = parseIfNDefDirective();
+
+                if (!ifndef) {
+                    return 0;
+                }
+
+                m_ast->statements.push_back(ifndef);
+                m_ast->nodes.push_back(ifndef);
                 continue;
             } else if (m_token.asDirective.type == directive::kIf) {
                 astIfDirectiveStatement *ifdef = parseIfDirective();
@@ -367,17 +382,26 @@ CHECK_RETURN astTU *parser::parse(int type, astTU* parent) {
                 }
 
                 m_ast->statements.push_back(ifdef);
+                m_ast->nodes.push_back(ifdef);
                 continue;
             } else if (m_token.asDirective.type == directive::kEndIf) {
+                m_ast->statements.push_back(GC_NEW(astEndIfDirectiveStatement) astEndIfDirectiveStatement());
+                m_ast->nodes.push_back(m_ast->statements.back());
                 // special case, endif doesn't have anything in it and is the end of parsing the current token
                 return m_ast;
             } else if (m_token.asDirective.type == directive::kElse) {
                 m_ast->elseDirective = GC_NEW(astElseDirectiveStatement) astElseDirectiveStatement();
+                m_ast->nodes.push_back(m_ast->elseDirective);
+
+                astTU* previous = m_ast;
+                m_ast->elseDirective->thenStatement = parse(m_ast->type, m_ast);
+                m_ast = previous;
                 return m_ast;
             } else if (m_token.asDirective.type == directive::kElIf) {
                 m_ast->elseDirective = GC_NEW(astElseDirectiveStatement) astElseDirectiveStatement();
+                m_ast->nodes.push_back(m_ast->elseDirective);
 
-                if (!next()) {
+                if (!next(false)) {
                     return 0;
                 }
 
@@ -414,6 +438,7 @@ CHECK_RETURN astTU *parser::parse(int type, astTU* parent) {
                 global->isArray = parse.isArray;
                 global->arraySizes = parse.arraySizes;
                 m_ast->globals.push_back(global);
+                m_ast->nodes.push_back(global);
                 m_scopes.back().push_back(global);
             }
         } else if (isOperator(kOperator_paranthesis_begin)) {
@@ -421,6 +446,7 @@ CHECK_RETURN astTU *parser::parse(int type, astTU* parent) {
             if (!function)
                 return 0;
             m_ast->functions.push_back(function);
+            m_ast->nodes.push_back(function);
         } else if (isType(kType_whitespace) || isType(kType_end_of_line)) {
             continue; // whitespace tokens will be used later for the preprocessor
         } else {
@@ -751,6 +777,7 @@ CHECK_RETURN bool parser::parseTopLevelItem(topLevel &level, topLevel *continuat
             if (!unique)
                 return false;
             m_ast->interfaceBlocks.push_back(unique);
+            m_ast->nodes.push_back(unique);
             if (isType(kType_semicolon)) {
                 return true;
             } else {
@@ -762,6 +789,7 @@ CHECK_RETURN bool parser::parseTopLevelItem(topLevel &level, topLevel *continuat
             if (!unique)
                 return false;
             m_ast->structures.push_back(unique);
+            m_ast->nodes.push_back(unique);
             if (isType(kType_semicolon))
             {
                 return true;
@@ -922,7 +950,7 @@ CHECK_RETURN bool parser::parseTopLevelItem(topLevel &level, topLevel *continuat
 
     // If it isn't a function or prototype than the use of void is not legal
     if (!isOperator(kOperator_paranthesis_begin)) {
-        if (level.type->builtin && ((astBuiltin*)level.type)->type == kKeyword_void) {
+        if (level.type->typeType == astType::kBuiltin && ((astBuiltin*)level.type)->type == kKeyword_void) {
             fatal("`void' cannot be used in declaration");
             return false;
         }
@@ -1202,7 +1230,7 @@ CHECK_RETURN astExpression *parser::parseUnary(endCondition end) {
             astFieldOrSwizzle *expression = GC_NEW(astExpression) astFieldOrSwizzle();
 
             astType *type = getType(operand);
-            if (type && !type->builtin) {
+            if (type && !type->typeType == astType::kBuiltin) {
                 astVariable *field = 0;
                 astStruct *kind = (astStruct*)type;
                 for (size_t i = 0; i < kind->fields.size(); i++) {
@@ -1681,7 +1709,7 @@ CHECK_RETURN astIfDirectiveStatement* parser::parseIfDirective() {
     if (m_token.asDirective.type == directive::kIf) {
         astIfDirectiveStatement* ifDef = GC_NEW(astIfDirectiveStatement) astIfDirectiveStatement();
 
-        if (!next()) {
+        if (!next(false)) {
             return 0;
         }
 
@@ -1711,23 +1739,8 @@ CHECK_RETURN astIfDirectiveStatement* parser::parseIfDirective() {
             return 0;
         }
 
-        if (m_token.asDirective.type == directive::kEndIf) {
-            return ifDef;
-        }
-
-        if (m_token.asDirective.type != directive::kElse) {
-            fatal("ending an if with an unexpected directive, must be else or endif");
-            return 0;
-        }
-
-        // parse the next statement, for elses this should contain the content too
-        // for endif there's no content
-        previous = m_ast;
-        ifDef->elseStatement = parse(m_ast->type, m_ast);
-        m_ast = previous;
-
-        if (!ifDef->elseStatement) {
-            fatal ("Cannot parse else directive: %s", m_error);
+        if (m_token.asDirective.type != directive::kEndIf) {
+            fatal("ending an ifdef with an unexpected directive, must be endif");
             return 0;
         }
 
@@ -1742,7 +1755,7 @@ CHECK_RETURN astIfDefDirectiveStatement* parser::parseIfDefDirective() {
     if (m_token.asDirective.type == directive::kIfDef) {
         astIfDefDirectiveStatement* ifDef = GC_NEW(astIfDefDirectiveStatement) astIfDefDirectiveStatement();
 
-        if (!next()) {
+        if (!next(false)) {
             return 0;
         }
 
@@ -1772,27 +1785,58 @@ CHECK_RETURN astIfDefDirectiveStatement* parser::parseIfDefDirective() {
             return 0;
         }
 
-        if (m_token.asDirective.type == directive::kEndIf) {
-            return ifDef;
-        }
-
-        if (m_token.asDirective.type != directive::kElse) {
-            fatal("ending an ifdef with an unexpected directive, must be else or endif");
-            return 0;
-        }
-
-        // parse the next statement, for elses this should contain the content too
-        // for endif there's no content
-        previous = m_ast;
-        ifDef->elseStatement = parse(m_ast->type, m_ast);
-        m_ast = previous;
-
-        if (!ifDef->elseStatement) {
-            fatal ("Cannot parse else directive: %s", m_error);
+        if (m_token.asDirective.type != directive::kEndIf) {
+            fatal("ending an ifdef with an unexpected directive, must be endif");
             return 0;
         }
 
         return ifDef;
+    } else {
+        fatal("expected a ifdef directive");
+        return 0;
+    }
+}
+
+CHECK_RETURN astIfNDefDirectiveStatement* parser::parseIfNDefDirective() {
+    if (m_token.asDirective.type == directive::kIfNDef) {
+        astIfNDefDirectiveStatement* ifndef = GC_NEW(astIfNDefDirectiveStatement) astIfNDefDirectiveStatement();
+
+        if (!next(false)) {
+            return 0;
+        }
+
+        ifndef->define = parseExpression(kEndConditionLineFeed);
+
+        if (!ifndef->define) {
+            return 0;
+        }
+
+        // there has to be some content as a then
+        astTU* previous = m_ast;
+        ifndef->thenStatement = parse(m_ast->type, m_ast);
+        m_ast = previous;
+
+        if (!ifndef->thenStatement) {
+            fatal ("Cannot parse ifdef directive: %s", m_error);
+            return 0;
+        }
+
+        if (isType(kType_eof)) {
+            return ifndef;
+        }
+
+        // what comes next? else, elif or endif?
+        if (!isType(kType_directive)) {
+            fatal("ending an ifdef with an unknown token");
+            return 0;
+        }
+
+        if (m_token.asDirective.type != directive::kEndIf) {
+            fatal("ending an ifdef with an unexpected directive, must be endif");
+            return 0;
+        }
+
+        return ifndef;
     } else {
         fatal("expected a ifdef directive");
         return 0;
@@ -1813,6 +1857,8 @@ CHECK_RETURN astStatement* parser::parseDirective() {
         return parseIfDirective();
     } else if (m_token.asDirective.type == directive::kIfDef) {
         return parseIfDefDirective();
+    } else if (m_token.asDirective.type == directive::kIfNDef) {
+        return parseIfNDefDirective();
     } else if (m_token.asDirective.type == directive::kEndIf) {
         if (!next())
             return 0;
@@ -1901,7 +1947,7 @@ CHECK_RETURN astFunction *parser::parseFunction(const topLevel &parse) {
                 }
             } else {
                 parameter->baseType = parseBuiltin();
-                if (parameter->baseType && parameter->baseType->builtin) {
+                if (parameter->baseType && parameter->baseType->typeType == astType::kBuiltin) {
                     astBuiltin *builtin = (astBuiltin*)parameter->baseType;
                     if (builtin->type == kKeyword_void && !strnil(parameter->name)) {
                         fatal("`void' parameter cannot be named");
@@ -1928,7 +1974,7 @@ CHECK_RETURN astFunction *parser::parseFunction(const topLevel &parse) {
 
     // If there is just one 'void' than silently drop it
     if (function->parameters.size() == 1) {
-        if (function->parameters[0]->baseType->builtin) {
+        if (function->parameters[0]->baseType->typeType == astType::kBuiltin) {
             astBuiltin *builtin = (astBuiltin*)function->parameters[0]->baseType;
             if (builtin->type == kKeyword_void)
                 function->parameters.pop_back();
@@ -1942,7 +1988,7 @@ CHECK_RETURN astFunction *parser::parseFunction(const topLevel &parse) {
             fatal("`main' cannot have parameters");
             return 0;
         }
-        if (!function->returnType->builtin || ((astBuiltin*)function->returnType)->type != kKeyword_void) {
+        if (!function->returnType->typeType == astType::kBuiltin || ((astBuiltin*)function->returnType)->type != kKeyword_void) {
             fatal("`main' must be declared to return void");
             return 0;
         }

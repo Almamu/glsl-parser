@@ -417,6 +417,9 @@ void lexer::read(token &out) {
         } else if (!strcmp(&chars[0], "ifdef")) {
             out.asDirective.type = directive::kIfDef;
             skipWhitespace(false);
+        } else if (!strcmp(&chars[0], "ifndef")) {
+            out.asDirective.type = directive::kIfNDef;
+            skipWhitespace(false);
         } else if (!strcmp(&chars[0], "if")) {
             out.asDirective.type = directive::kIf;
             skipWhitespace(false);

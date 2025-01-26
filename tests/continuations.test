@@ -1,9 +1,9 @@
-struct foo {
-float x;
-};
 mat4 model;
 mat4 view;
 mat4 projection;
+struct foo {
+float x;
+};
 foo a;
 foo b;
 foo c;

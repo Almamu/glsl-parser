@@ -65,6 +65,7 @@ struct directive {
         kInclude,
         kIf,
         kIfDef,
+        kIfNDef,
         kElse,
         kElIf,
         kEndIf,
@@ -92,6 +93,8 @@ struct directive {
         } asIf;
         struct {
         } asIfDef;
+        struct {
+        } asIfNDef;
         struct {
         } asElse;
         struct {

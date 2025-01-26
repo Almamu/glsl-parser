@@ -34,7 +34,7 @@ namespace glsl {
     }
 
     static void printType(astType *type) {
-        if (type->builtin)
+        if (type->typeType == astType::kBuiltin)
             printBuiltin((astBuiltin*)type);
         else
             print("%s", ((astStruct*)type)->name);
@@ -528,10 +528,6 @@ namespace glsl {
         printExpression(directive->value);
         print("\n");
         printTU(directive->thenStatement);
-        if (directive->elseStatement) {
-            printTU(directive->elseStatement);
-        }
-        print("#endif\n");
     }
 
     static void printIfDefDirective(astIfDefDirectiveStatement* directive) {
@@ -539,10 +535,13 @@ namespace glsl {
         printExpression(directive->define);
         print("\n");
         printTU(directive->thenStatement);
-        if (directive->elseStatement) {
-            printTU(directive->elseStatement);
-        }
-        print("#endif\n");
+    }
+
+    static void printIfNDefDirective(astIfNDefDirectiveStatement* directive) {
+        print("#ifndef ");
+        printExpression(directive->define);
+        print("\n");
+        printTU(directive->thenStatement);
     }
 
     static void printElseDirective(astElseDirectiveStatement* directive) {
@@ -550,12 +549,16 @@ namespace glsl {
             print("#elif ");
             printExpression(directive->value);
             print("\n");
-            if (directive->thenStatement) {
-                printTU(directive->thenStatement);
-            }
         } else {
             print("#else\n");
         }
+        if (directive->thenStatement) {
+            printTU(directive->thenStatement);
+        }
+    }
+
+    static void printEndIfDirective(astEndIfDirectiveStatement* directive) {
+        print("#endif\n");
     }
 
     static void printStatement(astStatement *statement) {
@@ -596,8 +599,12 @@ namespace glsl {
                 return printIfDirective((astIfDirectiveStatement*) statement);
             case astStatement::kIfDefDirective:
                 return printIfDefDirective((astIfDefDirectiveStatement*) statement);
+            case astStatement::kIfNDefDirective:
+                return printIfNDefDirective((astIfNDefDirectiveStatement*) statement);
             case astStatement::kElseDirective:
                 return printElseDirective((astElseDirectiveStatement*) statement);
+            case astStatement::kEndIfDirective:
+                return printEndIfDirective((astEndIfDirectiveStatement*) statement);
         }
         print("\n");
     }
@@ -687,6 +694,7 @@ namespace glsl {
     }
 
     void printTU(astTU *tu) {
+        /*
         if (tu->versionDirective)
             printVersionDirective(tu->versionDirective);
         for (size_t i = 0; i < tu->extensionDirectives.size(); i++)
@@ -702,6 +710,50 @@ namespace glsl {
         for (size_t i = 0; i < tu->functions.size(); i++)
             printFunction(tu->functions[i]);
         if (tu->elseDirective)
-            printElseDirective (tu->elseDirective);
+            printElseDirective (tu->elseDirective);*/
+        for (size_t i = 0; i < tu->nodes.size(); i++) {
+            astBase* el = tu->nodes[i];
+
+            switch (el->astType) {
+                case astBase::kType: {
+                        astType* type = (astType*) el;
+
+                        if (type->typeType == astType::kBuiltin) {
+                            print("// not printing a builtin type inside of a tu node\n");
+                            continue;
+                        }
+
+                        if (type->typeType == astType::kStruct) {
+                            printStructure((astStruct*) el);
+                        } else if (type->typeType == astType::kInterfaceBlock) {
+                            printInterfaceBlock((astInterfaceBlock*) el);
+                        } else if (type->typeType == astType::kExtensionDirective) {
+                            printExtensionDirective((astExtensionDirective*) el);
+                        } else if (type->typeType == astType::kVersionDirective) {
+                            printVersionDirective((astVersionDirective*) el);
+                        }
+                    }
+                    break;
+                case astBase::kVariable: {
+                        astVariable* variable = (astVariable*) el;
+
+                        if (variable->type != astVariable::kGlobal) {
+                            print("// not printing a non-global variable inside of a tu node\n");
+                            continue;
+                        }
+
+                        printGlobalVariable((astGlobalVariable *) el);
+                    }
+                    break;
+                case astBase::kStatement: {
+                        printStatement((astStatement *) el);
+                    }
+                    break;
+                case astBase::kFunction: {
+                        printFunction((astFunction *) el);
+                    }
+                    break;
+            }
+        }
     }
 }

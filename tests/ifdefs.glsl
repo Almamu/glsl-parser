@@ -11,6 +11,10 @@ void testfunction() {
 float testvalue;
 void test() {
 }
+#elif I_LIKE_TO == 0
+void secondtest() {
+    float third = testvalue;
+}
 #else
 void test() {
     float asdf = 0;
@@ -24,5 +28,11 @@ void secondtest() {
 #elif I_LIKE_TO == 0
 void secondtest() {
     float third = testvalue;
+}
+#endif
+
+#ifndef I_LIKE_TO
+void thirdtest() {
+
 }
 #endif

@@ -13,16 +13,16 @@ float w;
 uniform uniform_block {
 float x;
 };
+uniform_block uniform_data;
 in input_block {
 float y;
 };
+input_block input_data;
 out output_block {
 float z;
 };
+output_block output_data;
 buffer buffer_block {
 float w;
 };
-uniform_block uniform_data;
-input_block input_data;
-output_block output_data;
 buffer_block buffer_data;

@@ -19,8 +19,13 @@ const char *astStatement::name() const {
     case kDiscard:      return "discard";
     case kInclude:      return "include";
     case kIfDefDirective:  return "ifdef directive";
+    case kIfNDefDirective: return "ifndef directive";
+    case kElseDirective:  return "else directive";
+    case kDefine:       return "define";
+    case kEndIfDirective: return "endif directive";
+    case kEmpty:        return "empty";
+    default:            return "(unknown)";
     }
-    return "(unknown)";
 }
 
 astTU::astTU(int type, astTU* parent)
@@ -31,46 +36,53 @@ astTU::astTU(int type, astTU* parent)
 {
 }
 
-astType::astType(bool builtin)
-    : builtin(builtin)
+astBase::astBase(int type)
+    : astType(type)
+{
+}
+
+astType::astType(int type)
+    : astNode<astType>(kType)
+    , typeType(type)
 {
 }
 
 astStruct::astStruct()
-    : astType(false)
+    : astType(kStruct)
     , name(0)
 {
 }
 
 astInterfaceBlock::astInterfaceBlock()
-    : astType(false)
+    : astType(kInterfaceBlock)
     , name(0)
     , storage(0)
 {
 }
 
 astExtensionDirective::astExtensionDirective()
-    : astType(false)
+    : astType(kExtensionDirective)
     , name(0)
     , behavior(-1)
 {
 }
 
 astVersionDirective::astVersionDirective()
-    : astType(false)
+    : astType(kVersionDirective)
     , version(-1)
     , type(-1)
 {
 }
 
 astBuiltin::astBuiltin(int type)
-    : astType(true)
+    : astType(kBuiltin)
     , type(type)
 {
 }
 
 astVariable::astVariable(int type)
-    : name(0)
+    : astNode<astVariable>(kVariable)
+    , name(0)
     , baseType(0)
     , isArray(false)
     , isPrecise(false)
@@ -126,6 +138,7 @@ astDefineStatement::astDefineStatement()
 astElseDirectiveStatement::astElseDirectiveStatement()
     : astSimpleStatement (astStatement::kElseDirective)
     , value (0)
+    , thenStatement (0)
 {
 }
 
@@ -139,7 +152,13 @@ astIfDefDirectiveStatement::astIfDefDirectiveStatement()
     : astStatement (astStatement::kIfDefDirective)
     , define (0)
     , thenStatement (0)
-    , elseStatement (0)
+{
+}
+
+astIfNDefDirectiveStatement::astIfNDefDirectiveStatement()
+    : astStatement (astStatement::kIfNDefDirective)
+    , define (0)
+    , thenStatement (0)
 {
 }
 
@@ -147,7 +166,11 @@ astIfDirectiveStatement::astIfDirectiveStatement()
     : astStatement (astStatement::kIfDirective)
     , value (0)
     , thenStatement (0)
-    , elseStatement (0)
+{
+}
+
+    astEndIfDirectiveStatement::astEndIfDirectiveStatement()
+    : astSimpleStatement(astStatement::kEndIfDirective)
 {
 }
 
@@ -162,25 +185,29 @@ astDeclarationStatement::astDeclarationStatement()
 }
 
 astLayoutQualifier::astLayoutQualifier()
-    : name(0)
+    : astNode<astLayoutQualifier>(kLayoutQualifier)
+    , name(0)
     , initialValue(0)
 {
 }
 
 astFunction::astFunction()
-    : returnType(0)
+    : astNode<astFunction>(kFunction)
+    , returnType(0)
     , name(0)
     , isPrototype(false)
 {
 }
 
 astDeclaration::astDeclaration()
-    : variable(0)
+    : astNode<astDeclaration>(kDeclaration)
+    , variable(0)
 {
 }
 
 astStatement::astStatement(int type)
-    : type(type)
+    : astNode<astStatement>(kStatement)
+    , type(type)
 {
 }
 
@@ -266,7 +293,8 @@ astDiscardStatement::astDiscardStatement()
 }
 
 astExpression::astExpression(int type)
-    : type(type)
+    : astNode<astExpression>(kExpression)
+    , type(type)
 {
 }
 
