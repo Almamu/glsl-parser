@@ -6,6 +6,7 @@ add_executable(glsl-parser
         ast.cpp
         lexer.cpp
         parser.cpp
+        printer.cpp
         main.cpp
         util.cpp
 )
