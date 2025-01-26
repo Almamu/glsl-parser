@@ -726,6 +726,10 @@ CHECK_RETURN bool parser::parseTopLevelItem(topLevel &level, topLevel *continuat
         token peek = m_lexer.peek();
         if (IS_TYPE(peek, kType_eof))
             return false;
+        if (IS_TYPE(peek, kType_end_of_line)) {
+            m_lexer.read(m_token, true);
+            continue;
+        }
 
         topLevel item;
         if (continuation)
