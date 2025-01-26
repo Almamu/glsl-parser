@@ -134,7 +134,7 @@ struct lexer {
     lexer(const char *data);
 
     token read();
-    token peek();
+    token peek(bool ignore_eol = true);
 
     const char *error() const;
 
@@ -152,7 +152,7 @@ protected:
     int at(int offset = 0) const;
 
     void read(token &out);
-    void read(token &out, bool);
+    void read(token &out, bool, bool ignore_eol = true);
 
     void skipWhitespace(bool allowNewlines = false);
 

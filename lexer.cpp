@@ -688,18 +688,18 @@ vector<char> lexer::readNumeric(bool isOctalish, bool isHexish) {
     return digits;
 }
 
-token lexer::peek() {
+token lexer::peek(bool ignore_eol) {
     token out;
     backup();
-    read(out, true);
+    read(out, true, ignore_eol);
     restore();
     return out;
 }
 
-void lexer::read(token &out, bool) {
+void lexer::read(token &out, bool, bool ignore_eol) {
     do {
         read(out);
-    } while ((out.m_type == kType_whitespace || out.m_type == kType_comment) && !m_error);
+    } while (((ignore_eol && out.m_type == kType_end_of_line) || out.m_type == kType_whitespace || out.m_type == kType_comment) && !m_error);
 }
 
 const char *lexer::error() const {

@@ -26,6 +26,7 @@ const char *astStatement::name() const {
 astTU::astTU(int type, astTU* parent)
     : type(type)
     , versionDirective(0)
+    , elseDirective(0)
     , parent(parent)
 {
 }

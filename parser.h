@@ -67,7 +67,7 @@ protected:
 
     typedef int endCondition;
 
-    CHECK_RETURN bool next();
+    CHECK_RETURN bool next(bool ignore_eol = true);
 
     CHECK_RETURN bool parseStorage(topLevel &current); // const, in, out, attribute, uniform, varying, buffer, shared
     CHECK_RETURN bool parseAuxiliary(topLevel &current); // centroid, sample, patch

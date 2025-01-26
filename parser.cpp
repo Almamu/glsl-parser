@@ -319,11 +319,6 @@ CHECK_RETURN astTU *parser::parse(int type, astTU* parent) {
             break;
         }
 
-        if (isType(kType_end_of_line)) {
-            // ignore end of lines as they're useless here
-            continue;
-        }
-
         if (isType(kType_directive)) {
             if (m_token.asDirective.type == directive::kVersion) {
                 if (m_ast->versionDirective) {
@@ -1659,7 +1654,7 @@ CHECK_RETURN astDefineStatement* parser::parseDefineDirective() {
         // add the define to the scope
         m_defines.back().push_back(define);
 
-        token token = m_lexer.peek();
+        token token = m_lexer.peek(false);
 
         if (IS_TYPE(token, kType_end_of_line)) {
             return define;
@@ -1963,11 +1958,6 @@ CHECK_RETURN astFunction *parser::parseFunction(const topLevel &parse) {
         for (size_t i = 0; i < function->parameters.size(); i++)
             m_scopes.back().push_back(function->parameters[i]);
         while (!isType(kType_scope_end)) {
-            if (isType(kType_end_of_line)) {
-                if (!next())
-                    return 0;
-                continue;
-            }
             astStatement *statement = parseStatement();
             if (!statement)
                 return 0;
@@ -2062,8 +2052,8 @@ CHECK_RETURN astFunctionCall *parser::parseFunctionCall() {
     return expression;
 }
 
-CHECK_RETURN bool parser::next() {
-    m_lexer.read(m_token, true);
+CHECK_RETURN bool parser::next(bool ignore_eol) {
+    m_lexer.read(m_token, true, ignore_eol);
     if (isType(kType_eof)) {
         fatal("premature end of file");
         return false;
