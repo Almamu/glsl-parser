@@ -17,13 +17,16 @@ const char *astStatement::name() const {
     case kBreak:        return "break";
     case kReturn:       return "return";
     case kDiscard:      return "discard";
+    case kInclude:      return "include";
+    case kIfDefDirective:  return "ifdef directive";
     }
     return "(unknown)";
 }
 
-astTU::astTU(int type)
+astTU::astTU(int type, astTU* parent)
     : type(type)
     , versionDirective(0)
+    , parent(parent)
 {
 }
 
@@ -109,6 +112,41 @@ astSimpleStatement::astSimpleStatement(int type)
 
 astCompoundStatement::astCompoundStatement()
     : astStatement(astStatement::kCompound)
+{
+}
+
+astDefineStatement::astDefineStatement()
+    : astSimpleStatement (astStatement::kDefine)
+    , name (0)
+    , value (0)
+{
+}
+
+astElseDirectiveStatement::astElseDirectiveStatement()
+    : astSimpleStatement (astStatement::kElseDirective)
+    , value (0)
+{
+}
+
+astIncludeStatement::astIncludeStatement()
+    : astSimpleStatement (astStatement::kInclude)
+    , name (0)
+{
+}
+
+astIfDefDirectiveStatement::astIfDefDirectiveStatement()
+    : astStatement (astStatement::kIfDefDirective)
+    , define (0)
+    , thenStatement (0)
+    , elseStatement (0)
+{
+}
+
+astIfDirectiveStatement::astIfDirectiveStatement()
+    : astStatement (astStatement::kIfDirective)
+    , value (0)
+    , thenStatement (0)
+    , elseStatement (0)
 {
 }
 
@@ -264,6 +302,12 @@ astBoolConstant::astBoolConstant(bool value)
 astVariableIdentifier::astVariableIdentifier(astVariable *variable)
     : astExpression(astExpression::kVariableIdentifier)
     , variable(variable)
+{
+}
+
+astDefineIdentifier::astDefineIdentifier(astDefineStatement *define)
+    : astExpression(astExpression::kDefineIdentifier)
+    , define(define)
 {
 }
 

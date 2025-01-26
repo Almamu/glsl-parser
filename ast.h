@@ -49,9 +49,14 @@ struct astInterfaceBlock;
 struct astVersionDirective;
 struct astExtensionDirective;
 struct astVariable;
+struct astDefineStatement;
+struct astIfDefDirectiveStatement;
+struct astIncludeStatement;
+struct astIfDirectiveStatement;
+struct astElseDirectiveStatement;
 
 struct astTU {
-    astTU(int type);
+    astTU(int type, astTU* parent = 0);
 
     enum {
         kCompute,
@@ -65,11 +70,14 @@ struct astTU {
     int type;
 
     astVersionDirective* versionDirective;
+    astElseDirectiveStatement* elseDirective;
     vector<astExtensionDirective*> extensionDirectives;
+    vector<astStatement*> statements;
     vector<astFunction*> functions;
     vector<astGlobalVariable*> globals;
     vector<astStruct*> structures;
     vector<astInterfaceBlock*> interfaceBlocks;
+    astTU* parent;
 
 private:
     astTU(const astTU&);
@@ -232,7 +240,12 @@ struct astStatement : astNode<astStatement> {
         kContinue,
         kBreak,
         kReturn,
-        kDiscard
+        kDiscard,
+        kDefine,
+        kInclude,
+        kIfDirective,
+        kElseDirective,
+        kIfDefDirective,
     };
     int type;
     const char *name() const;
@@ -245,6 +258,37 @@ struct astSimpleStatement : astStatement {
 struct astCompoundStatement : astStatement {
     astCompoundStatement();
     vector<astStatement*> statements;
+};
+
+struct astIncludeStatement : astSimpleStatement {
+    astIncludeStatement();
+    char* name;
+};
+
+struct astDefineStatement : astSimpleStatement {
+    astDefineStatement();
+    char* name;
+    astExpression* value;
+};
+
+struct astElseDirectiveStatement : astSimpleStatement {
+    astElseDirectiveStatement();
+    astExpression* value;
+    astTU* thenStatement;
+};
+
+struct astIfDefDirectiveStatement : astStatement {
+    astIfDefDirectiveStatement();
+    astExpression* define;
+    astTU *thenStatement;
+    astTU *elseStatement;
+};
+
+struct astIfDirectiveStatement : astStatement {
+    astIfDirectiveStatement();
+    astExpression* value;
+    astTU *thenStatement;
+    astTU *elseStatement;
 };
 
 struct astEmptyStatement : astSimpleStatement {
@@ -335,6 +379,7 @@ struct astExpression : astNode<astExpression> {
         kDoubleConstant,
         kBoolConstant,
         kVariableIdentifier,
+        kDefineIdentifier,
         kFieldOrSwizzle,
         kArraySubscript,
         kFunctionCall,
@@ -383,6 +428,11 @@ struct astBoolConstant : astExpression {
 struct astVariableIdentifier : astExpression {
     astVariableIdentifier(astVariable *variable);
     astVariable *variable;
+};
+
+struct astDefineIdentifier : astExpression {
+    astDefineIdentifier(astDefineStatement *define);
+    astDefineStatement *define;
 };
 
 struct astFieldOrSwizzle : astExpression {

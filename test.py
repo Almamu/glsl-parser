@@ -9,7 +9,7 @@ def main():
     test_dir_name = 'tests'
     repo_dir = os.path.dirname(os.path.realpath(__file__))
     test_dir = os.path.join(repo_dir, test_dir_name)
-    parser = os.path.join(repo_dir, 'glsl-parser')
+    parser = os.path.join(repo_dir, 'cmake-build-debug', 'glsl-parser')
 
     for name in sorted(glob(os.path.join(test_dir, '*.glsl'))):
         base = os.path.splitext(name)[0]

@@ -269,6 +269,7 @@ void lexer::read(token &out) {
             m_error = "Expected directive";
             return;
         }
+        chars.push_back('\0');
 
         if (!strcmp(&chars[0], "version")) {
             out.asDirective.type = directive::kVersion;
@@ -371,6 +372,92 @@ void lexer::read(token &out) {
             }
             memcpy(name, &extension[0], name_len + 1);
             out.asDirective.asExtension.name = name;
+        } else if (!strcmp(&chars[0], "include")) {
+            out.asDirective.type = directive::kInclude;
+
+            skipWhitespace (false);
+
+            if(at() != '"' && at() != '\'') {
+                m_error = "Filename in #include directive must be enclosed in quotes";
+                return;
+            }
+
+            m_location.advanceColumn ();
+
+            vector<char> filename;
+            // only stop on quotes or newline, where it ends is checked afters
+            while (position() != m_length && at() != '\'' && at() != '"' && at() != '\n') {
+                filename.push_back(at());
+                m_location.advanceColumn();
+            }
+
+            if (filename.empty()) {
+                m_error = "Expected filename in #include directive";
+                return;
+            }
+
+            filename.push_back('\0');
+
+            if(at() != '"' && at() != '\'') {
+                m_error = "Filename in #include directive must be enclosed in quotes";
+                return;
+            }
+
+            m_location.advanceColumn ();
+
+            // Do this late when nothing can fail so we don't leak memory.
+            size_t name_len = strlen(&filename[0]);
+            char *name = (char*)malloc(name_len + 1);
+            if (!name) {
+                m_error = "Out of memory";
+                return;
+            }
+            memcpy(name, &filename[0], name_len + 1);
+            out.asDirective.asInclude.file = name;
+        } else if (!strcmp(&chars[0], "ifdef")) {
+            out.asDirective.type = directive::kIfDef;
+            skipWhitespace(false);
+        } else if (!strcmp(&chars[0], "if")) {
+            out.asDirective.type = directive::kIf;
+            skipWhitespace(false);
+        } else if (!strcmp(&chars[0], "else")) {
+            out.asDirective.type = directive::kElse;
+            skipWhitespace(false);
+        } else if (!strcmp(&chars[0], "elif")) {
+            out.asDirective.type = directive::kElIf;
+            skipWhitespace(false);
+        } else if (!strcmp(&chars[0], "endif")) {
+            out.asDirective.type = directive::kEndIf;
+            skipWhitespace(false);
+        } else if (!strcmp(&chars[0], "define")) {
+            out.asDirective.type = directive::kDefine;
+            skipWhitespace(false);
+
+            vector<char> define;
+            // only stop on quotes or newline, where it ends is checked afters
+            while (position() != m_length && (isChar(at()) || isDigit(at()) || at() == '_')) {
+                define.push_back(at());
+                m_location.advanceColumn();
+            }
+
+            if (define.empty()) {
+                m_error = "Expected define name in #define directive";
+                return;
+            }
+
+            define.push_back('\0');
+
+            skipWhitespace(false);
+
+            // Do this late when nothing can fail so we don't leak memory.
+            size_t name_len = strlen(&define[0]);
+            char *name = (char*)malloc(name_len + 1);
+            if (!name) {
+                m_error = "Out of memory";
+                return;
+            }
+            memcpy(name, &define[0], name_len + 1);
+            out.asDirective.asDefine.name = name;
         } else {
             m_error = "Unsupported directive";
             return;
@@ -381,6 +468,9 @@ void lexer::read(token &out) {
         switch (at()) {
         // Non operators
         case '\n':
+            out.m_type = kType_end_of_line; // end of lines are a bit special, sadly
+            m_location.advanceColumn();
+            break;
         case '\t':
         case '\f':
         case '\v':
@@ -429,7 +519,8 @@ void lexer::read(token &out) {
                 // Skip line comments
                 while (position() != m_length) {
                     if (at() == '\n') {
-                        m_location.advanceLine();
+                        // end of lines are required
+                        //m_location.advanceLine();
                         break;
                     }
                     m_location.advanceColumn();

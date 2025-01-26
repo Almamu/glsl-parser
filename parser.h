@@ -48,7 +48,7 @@ struct topLevel {
 struct parser {
     ~parser();
     parser(const char *source, const char *fileName);
-    CHECK_RETURN astTU *parse(int type);
+    CHECK_RETURN astTU *parse(int type, astTU* parse = 0);
 
     const char *error() const;
 
@@ -60,7 +60,9 @@ protected:
         kEndConditionParanthesis = 1 << 1,
         kEndConditionBracket = 1 << 2,
         kEndConditionColon = 1 << 3,
-        kEndConditionComma = 1 << 4
+        kEndConditionComma = 1 << 4,
+        kEndConditionLineFeed = 1 << 5,
+        kEndConditionElseEndIfDirective = 1 << 6,
     };
 
     typedef int endCondition;
@@ -127,13 +129,20 @@ protected:
     CHECK_RETURN astDoStatement *parseDoStatement();
     CHECK_RETURN astWhileStatement *parseWhileStatement();
 
+    CHECK_RETURN astDefineStatement* parseDefineDirective();
+    CHECK_RETURN astIfDefDirectiveStatement* parseIfDefDirective();
+    CHECK_RETURN astIfDirectiveStatement* parseIfDirective();
+    CHECK_RETURN astStatement *parseDirective();
+
     astBinaryExpression *createExpression();
 
     astType *findType(const char *identifier);
     astVariable *findVariable(const char *identifier);
+    astDefineStatement *findDefine(const char *define);
     astType* getType(astExpression *expression);
 private:
     typedef vector<astVariable *> scope;
+    typedef vector<astDefineStatement*> defineScope;
 
     // Specialized in .cpp
     template<typename T>
@@ -143,6 +152,7 @@ private:
     lexer m_lexer;
     token m_token;
     vector<scope> m_scopes;
+    vector<defineScope> m_defines;
     vector<astBuiltin*> m_builtins;
     char *m_error;
     char *m_oom;

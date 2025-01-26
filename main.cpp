@@ -28,6 +28,7 @@ static const char *kOperators[] = {
 
 static void printExpression(astExpression *expression);
 static void printStatement(astStatement *statement);
+static void printTU(astTU *tu);
 
 static void printBuiltin(astBuiltin *builtin) {
     print("%s", kTypes[builtin->type]);
@@ -208,6 +209,10 @@ static void printVariableIdentifier(astVariableIdentifier *expression) {
     printVariable(expression->variable, true);
 }
 
+static void printDefineIdentifier(astDefineIdentifier *expression) {
+    printf("%s", expression->define->name);
+}
+
 static void printFieldOrSwizzle(astFieldOrSwizzle *expression) {
     printExpression(expression->operand);
     print(".%s", expression->name);
@@ -341,6 +346,8 @@ static void printExpression(astExpression *expression) {
         return printBoolConstant((astBoolConstant*)expression);
     case astExpression::kVariableIdentifier:
         return printVariableIdentifier((astVariableIdentifier*)expression);
+    case astExpression::kDefineIdentifier:
+        return printDefineIdentifier((astDefineIdentifier*)expression);
     case astExpression::kFieldOrSwizzle:
         return printFieldOrSwizzle((astFieldOrSwizzle*)expression);
     case astExpression::kArraySubscript:
@@ -504,6 +511,54 @@ static void printDiscardStatement() {
     print("discard;\n");
 }
 
+static void printInclude(astIncludeStatement* include) {
+    printf("#include \"%s\"\n", include->name);
+}
+
+static void printDefine(astDefineStatement* define) {
+    printf("#define %s ", define->name);
+
+    if (define->value)
+        printExpression(define->value);
+
+    print("\n");
+}
+
+static void printIfDirective(astIfDirectiveStatement* directive) {
+    print("#if ");
+    printExpression(directive->value);
+    print("\n");
+    printTU(directive->thenStatement);
+    if (directive->elseStatement) {
+        printTU(directive->elseStatement);
+    }
+    print("#endif\n");
+}
+
+static void printIfDefDirective(astIfDefDirectiveStatement* directive) {
+    print("#ifdef ");
+    printExpression(directive->define);
+    print("\n");
+    printTU(directive->thenStatement);
+    if (directive->elseStatement) {
+        printTU(directive->elseStatement);
+    }
+    print("#endif\n");
+}
+
+static void printElseDirective(astElseDirectiveStatement* directive) {
+    if (directive->value) {
+        print("#elif ");
+        printExpression(directive->value);
+        print("\n");
+        if (directive->thenStatement) {
+            printTU(directive->thenStatement);
+        }
+    } else {
+        print("#else\n");
+    }
+}
+
 static void printStatement(astStatement *statement) {
     switch (statement->type) {
     case astStatement::kCompound:
@@ -534,6 +589,16 @@ static void printStatement(astStatement *statement) {
         return printReturnStatement((astReturnStatement*)statement);
     case astStatement::kDiscard:
         return printDiscardStatement();
+    case astStatement::kInclude:
+        return printInclude((astIncludeStatement*)statement);
+    case astStatement::kDefine:
+        return printDefine((astDefineStatement*) statement);
+    case astStatement::kIfDirective:
+        return printIfDirective((astIfDirectiveStatement*) statement);
+    case astStatement::kIfDefDirective:
+        return printIfDefDirective((astIfDefDirectiveStatement*) statement);
+    case astStatement::kElseDirective:
+        return printElseDirective((astElseDirectiveStatement*) statement);
     }
     print("\n");
 }
@@ -627,6 +692,8 @@ static void printTU(astTU *tu) {
         printVersionDirective(tu->versionDirective);
     for (size_t i = 0; i < tu->extensionDirectives.size(); i++)
         printExtensionDirective(tu->extensionDirectives[i]);
+    for (size_t i = 0; i < tu->statements.size(); i++)
+        printStatement(tu->statements[i]);
     for (size_t i = 0; i < tu->structures.size(); i++)
         printStructure(tu->structures[i]);
     for (size_t i = 0; i < tu->interfaceBlocks.size(); i++)
@@ -635,6 +702,8 @@ static void printTU(astTU *tu) {
         printGlobalVariable(tu->globals[i]);
     for (size_t i = 0; i < tu->functions.size(); i++)
         printFunction(tu->functions[i]);
+    if (tu->elseDirective)
+        printElseDirective (tu->elseDirective);
 }
 
 struct sourceFile {

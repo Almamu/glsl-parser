@@ -61,7 +61,14 @@ struct operatorInfo {
 struct directive {
     enum {
         kVersion,
-        kExtension
+        kExtension,
+        kInclude,
+        kIf,
+        kIfDef,
+        kElse,
+        kElIf,
+        kEndIf,
+        kDefine,
     };
 
     int type; // kVersion, kExtension
@@ -75,6 +82,20 @@ struct directive {
             char* name;
             int behavior; // kEnable, kRequire, kWarn, kDisable
         } asExtension;
+        struct {
+            char* file;
+        } asInclude;
+        struct {
+            char* name;
+        } asDefine;
+        struct {
+        } asIf;
+        struct {
+        } asIfDef;
+        struct {
+        } asElse;
+        struct {
+        } asEndIf;
     };
 };
 
