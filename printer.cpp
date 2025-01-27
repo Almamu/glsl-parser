@@ -679,8 +679,13 @@ namespace glsl {
     static void printFunction(astFunction *function) {
         printType(function->returnType);
         output(" %s(", function->name);
-        for (auto & parameter : function->parameters)
-            printFunctionParameter(parameter);
+        for (size_t i = 0; i < function->parameters.size(); i++) {
+            printFunctionParameter(function->parameters[i]);
+
+            if (i != function->parameters.size() - 1) {
+                output(", ");
+            }
+        }
         output(")");
         if (function->isPrototype) {
             output(";\n");
