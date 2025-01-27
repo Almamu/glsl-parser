@@ -1,5 +1,5 @@
-#ifndef UTIL_H
-#define UTIL_H
+#pragma once
+
 #include <stdarg.h> // va_list
 #include <vector>
 
@@ -50,5 +50,3 @@ private:
 };
 
 }
-
-#endif

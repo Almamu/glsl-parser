@@ -1,6 +1,6 @@
-#ifndef AST_HDR
-#define AST_HDR
-#include <stdlib.h> // free, malloc, size_t
+#pragma once
+
+#include <cstdlib> // free, malloc, size_t
 #include "util.h"
 
 namespace glsl {
@@ -13,12 +13,12 @@ static inline void astDestroy(void *self) {
 }
 
 struct astMemory {
-    astMemory() : data(0), dtor(0) { }
+    astMemory() : data(nullptr), dtor(nullptr) { }
     template <typename T>
-    astMemory(T *data) : data((void*)data), dtor(&astDestroy<T>) { }
+    explicit astMemory(T *data) : data((void*)data), dtor(&astDestroy<T>) { }
     void *data;
     void (*dtor)(void*);
-    void destroy() {
+    void destroy() const {
         dtor(data);
     }
 };
@@ -33,22 +33,22 @@ struct astBase {
         kStatement,
         kExpression,
     } astType;
-    astBase(enum astBaseType type);
+    explicit astBase(enum astBaseType type);
 };
 
 // Nodes are to inherit from astNode or astCollector
 template <typename T>
 struct astNode : astBase {
-    astNode(enum astBaseType type) : astBase(type) {}
-    void *operator new(size_t size, vector<astMemory> *collector) throw() {
+    explicit astNode(enum astBaseType type) : astBase(type) {}
+    void *operator new(size_t size, vector<astMemory> *collector) noexcept {
         void *data = malloc(size);
         if (data)
             collector->push_back(astMemory((T*)data));
         return data;
     }
 private:
-    void *operator new(size_t);
-    void operator delete(void *);
+    void *operator new(size_t) noexcept { return nullptr; }
+    void operator delete(void *) {}
 };
 
 
@@ -67,7 +67,7 @@ struct astDefineStatement;
 struct astElseDirectiveStatement;
 
 struct astTU {
-    astTU(int type);
+    explicit astTU(int type);
 
     enum {
         kCompute,
@@ -104,11 +104,11 @@ struct astType : astNode<astType> {
         kVersionDirective,
         kExtensionDirective
     } typeType;
-    astType(enum astTypeType type);
+    explicit astType(enum astTypeType type);
 };
 
 struct astBuiltin : astType {
-    astBuiltin(int type);
+    explicit astBuiltin(int type);
     int type; // kKeyword_*
 };
 
@@ -152,7 +152,7 @@ struct astVariable : astNode<astVariable> {
         kGlobal,
         kField
     } type;
-    astVariable(enum astVariableType type);
+    explicit astVariable(enum astVariableType type);
     char *name;
     struct astType *baseType;
     bool isArray;
@@ -267,12 +267,12 @@ struct astStatement : astNode<astStatement> {
         kIfNDefDirective,
         kEndIfDirective,
     } type;
-    astStatement(enum astStatementType type);
-    const char *name() const;
+    explicit astStatement(enum astStatementType type);
+    [[nodiscard]] const char *name() const;
 };
 
 struct astSimpleStatement : astStatement {
-    astSimpleStatement(enum astStatementType type);
+    explicit astSimpleStatement(enum astStatementType type);
 };
 
 struct astCompoundStatement : astStatement {
@@ -299,7 +299,7 @@ struct astElseDirectiveStatement : astSimpleStatement {
 };
 
 struct astIfDirectiveStatement : astStatement {
-    astIfDirectiveStatement(astStatementType type = astStatement::kIfDirective);
+    explicit astIfDirectiveStatement(astStatementType type = astStatement::kIfDirective);
     astExpression* value;
     vector<astBase*> thenNodes;
     vector<astBase*> elseNodes;
@@ -327,7 +327,7 @@ struct astDeclarationStatement : astSimpleStatement {
 };
 
 struct astExpressionStatement : astSimpleStatement {
-    astExpressionStatement(astExpression *expression);
+    explicit astExpressionStatement(astExpression *expression);
     astExpression *expression;
 };
 
@@ -351,7 +351,7 @@ struct astCaseLabelStatement : astSimpleStatement {
 };
 
 struct astIterationStatement : astSimpleStatement {
-    astIterationStatement(enum astStatementType type);
+    explicit astIterationStatement(enum astStatementType type);
 };
 
 struct astWhileStatement : astIterationStatement {
@@ -375,7 +375,7 @@ struct astForStatement : astIterationStatement {
 };
 
 struct astJumpStatement : astStatement {
-    astJumpStatement(enum astStatementType type);
+    explicit astJumpStatement(enum astStatementType type);
 };
 
 struct astContinueStatement : astJumpStatement {
@@ -423,46 +423,46 @@ struct astExpression : astNode<astExpression> {
         kOperation,
         kTernary
     } type;
-    astExpression(enum astExpressionType type);
+    explicit astExpression(enum astExpressionType type);
 };
 
 struct astIntConstant : astExpression {
-    astIntConstant(int value);
+    explicit astIntConstant(int value);
     int value;
 };
 
 struct astUIntConstant : astExpression {
-    astUIntConstant(unsigned int value);
+    explicit astUIntConstant(unsigned int value);
     unsigned int value;
 };
 
 struct astFloatConstant : astExpression {
-    astFloatConstant(float value);
+    explicit astFloatConstant(float value);
     float value;
 };
 
 struct astDoubleConstant : astExpression {
-    astDoubleConstant(double value);
+    explicit astDoubleConstant(double value);
     double value;
 };
 
 struct astBoolConstant : astExpression {
-    astBoolConstant(bool value);
+    explicit astBoolConstant(bool value);
     bool value;
 };
 
 struct astVariableIdentifier : astExpression {
-    astVariableIdentifier(astVariable *variable);
+    explicit astVariableIdentifier(astVariable *variable);
     astVariable *variable;
 };
 
 struct astDefineIdentifier : astExpression {
-    astDefineIdentifier(astDefineStatement *define);
+    explicit astDefineIdentifier(astDefineStatement *define);
     astDefineStatement *define;
 };
 
 struct astUnknownIdentifier : astExpression {
-    astUnknownIdentifier(char *define);
+    explicit astUnknownIdentifier(char *define);
     char *define;
 };
 
@@ -498,41 +498,41 @@ struct astUnaryExpression : astExpression {
 
 struct astBinaryExpression : astExpression {
     // Base class
-    astBinaryExpression(enum astExpressionType type);
+    explicit astBinaryExpression(enum astExpressionType type);
     astExpression *operand1;
     astExpression *operand2;
 };
 
 struct astPostIncrementExpression : astUnaryExpression {
-    astPostIncrementExpression(astExpression *operand);
+    explicit astPostIncrementExpression(astExpression *operand);
 };
 
 struct astPostDecrementExpression : astUnaryExpression {
-    astPostDecrementExpression(astExpression *operand);
+    explicit astPostDecrementExpression(astExpression *operand);
 };
 
 struct astUnaryPlusExpression : astUnaryExpression {
-    astUnaryPlusExpression(astExpression *operand);
+    explicit astUnaryPlusExpression(astExpression *operand);
 };
 
 struct astUnaryMinusExpression : astUnaryExpression {
-    astUnaryMinusExpression(astExpression *operand);
+    explicit astUnaryMinusExpression(astExpression *operand);
 };
 
 struct astUnaryBitNotExpression : astUnaryExpression {
-    astUnaryBitNotExpression(astExpression *operand);
+    explicit astUnaryBitNotExpression(astExpression *operand);
 };
 
 struct astUnaryLogicalNotExpression : astUnaryExpression {
-    astUnaryLogicalNotExpression(astExpression *operand);
+    explicit astUnaryLogicalNotExpression(astExpression *operand);
 };
 
 struct astPrefixIncrementExpression : astUnaryExpression {
-    astPrefixIncrementExpression(astExpression *operand);
+    explicit astPrefixIncrementExpression(astExpression *operand);
 };
 
 struct astPrefixDecrementExpression : astUnaryExpression {
-    astPrefixDecrementExpression(astExpression *operand);
+    explicit astPrefixDecrementExpression(astExpression *operand);
 };
 
 struct astSequenceExpression : astBinaryExpression {
@@ -540,12 +540,12 @@ struct astSequenceExpression : astBinaryExpression {
 };
 
 struct astAssignmentExpression : astBinaryExpression {
-    astAssignmentExpression(int assignment);
+    explicit astAssignmentExpression(int assignment);
     int assignment;
 };
 
 struct astOperationExpression : astBinaryExpression {
-    astOperationExpression(int operation);
+    explicit astOperationExpression(int operation);
     int operation;
 };
 
@@ -557,5 +557,3 @@ struct astTernaryExpression : astExpression {
 };
 
 }
-
-#endif

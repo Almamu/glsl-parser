@@ -1,4 +1,4 @@
-#include <string.h> // strcmp, memcpy
+#include <cstring> // strcmp, memcpy
 
 #include "parser.h"
 #include "util.h"
@@ -6,7 +6,7 @@
 namespace glsl {
 
 parser::parser(const char *source, const char *fileName)
-    : m_ast(0)
+    : m_ast(nullptr)
     , m_lexer(source)
     , m_fileName(fileName)
 {
@@ -16,10 +16,10 @@ parser::parser(const char *source, const char *fileName)
 
 parser::~parser() {
     delete m_ast;
-    for (size_t i = 0; i < m_strings.size(); i++)
-        free(m_strings[i]);
-    for (size_t i = 0; i < m_memory.size(); i++)
-        m_memory[i].destroy();
+    for (auto & m_string : m_strings)
+        free(m_string);
+    for (auto & i : m_memory)
+        i.destroy();
 }
 
 #define IS_TYPE(TOKEN, TYPE) \
@@ -29,7 +29,7 @@ parser::~parser() {
 #define IS_OPERATOR(TOKEN, OPERATOR) \
     (IS_TYPE((TOKEN), kType_operator) && (TOKEN).asOperator == (OPERATOR))
 
-#define GC_NEW(X) new(&m_memory)
+#define GC_NEW new(&m_memory)
 
 bool parser::isType(int type) const {
     return IS_TYPE(m_token, type);
@@ -64,18 +64,16 @@ bool parser::isConstant(astExpression *expression) const {
         if (!initialValue)
             return false;
         return isConstant(initialValue);
-    } else if (expression->type == astExpression::kUnaryMinus)
-        return isConstant(((astUnaryExpression*)expression)->operand);
-    else if (expression->type == astExpression::kUnaryPlus)
-        return isConstant(((astUnaryExpression*)expression)->operand);
-    else if (expression->type == astExpression::kOperation) {
-        astOperationExpression *operation = (astOperationExpression*)expression;
+    } else if (expression->type == astExpression::kUnaryPlus || expression->type == astExpression::kUnaryMinus) {
+        return isConstant(((astUnaryExpression *) expression)->operand);
+    } else if (expression->type == astExpression::kOperation) {
+        auto *operation = (astOperationExpression*)expression;
         return isConstant(operation->operand1) && isConstant(operation->operand2);
     }
     return false;
 }
 
-bool parser::isConstantValue(astExpression *expression) const {
+bool parser::isConstantValue(astExpression *expression) {
     return expression->type == astExpression::kIntConstant ||
            expression->type == astExpression::kUIntConstant ||
            expression->type == astExpression::kFloatConstant ||
@@ -89,11 +87,11 @@ bool parser::isConstantValue(astExpression *expression) const {
 #define DCONST(X) ((astDoubleConstant*)(X))
 #define BCONST(X) ((astBoolConstant*)(X))
 
-#define ICONST_NEW(X) GC_NEW(astConstantExpression) astIntConstant(X)
-#define UCONST_NEW(X) GC_NEW(astConstantExpression) astUIntConstant(X)
-#define FCONST_NEW(X) GC_NEW(astConstantExpression) astFloatConstant(X)
-#define DCONST_NEW(X) GC_NEW(astConstantExpression) astDoubleConstant(X)
-#define BCONST_NEW(X) GC_NEW(astConstantExpression) astBoolConstant(X)
+#define ICONST_NEW(X) GC_NEW astIntConstant(X)
+#define UCONST_NEW(X) GC_NEW astUIntConstant(X)
+#define FCONST_NEW(X) GC_NEW astFloatConstant(X)
+#define DCONST_NEW(X) GC_NEW astDoubleConstant(X)
+#define BCONST_NEW(X) GC_NEW astBoolConstant(X)
 
 #define IVAL(X) (ICONST(X)->value)
 #define UVAL(X) (UCONST(X)->value)
@@ -102,154 +100,162 @@ bool parser::isConstantValue(astExpression *expression) const {
 #define BVAL(X) (BCONST(X)->value)
 
 astConstantExpression *parser::evaluate(astExpression *expression) {
-    if (!expression) return 0;
+    if (!expression)
+        return nullptr;
     else if (isConstantValue(expression))
         return expression;
     else if (expression->type == astExpression::kVariableIdentifier)
         return evaluate(((astGlobalVariable*)((astVariableIdentifier*)expression)->variable)->initialValue);
     else if (expression->type == astExpression::kUnaryMinus) {
         astExpression *operand = evaluate(((astUnaryExpression*)expression)->operand);
-        if (!operand) return 0;
+        if (!operand)
+            return nullptr;
         switch (operand->type) {
         case astExpression::kIntConstant:    return ICONST_NEW(-IVAL(operand));
         case astExpression::kFloatConstant:  return FCONST_NEW(-FVAL(operand));
         case astExpression::kDoubleConstant: return DCONST_NEW(-DVAL(operand));
         default:
             fatal("invalid operation in constant expression");
-            return 0;
+            return nullptr;
         }
     } else if (expression->type == astExpression::kUnaryPlus) {
         astExpression *operand = evaluate(((astUnaryExpression*)expression)->operand);
-        if (!operand) return 0;
+        if (!operand)
+            return nullptr;
         switch (operand->type) {
-        case astExpression::kIntConstant:
-        case astExpression::kUIntConstant:
-        case astExpression::kFloatConstant:
-        case astExpression::kDoubleConstant:
-            return operand;
-        default:
-            fatal("invalid operation in constant expression");
-            return 0;
+            case astExpression::kIntConstant:
+            case astExpression::kUIntConstant:
+            case astExpression::kFloatConstant:
+            case astExpression::kDoubleConstant:
+                return operand;
+            default:
+                fatal("invalid operation in constant expression");
+                return nullptr;
         }
     } else if (expression->type == astExpression::kOperation) {
         int operation = ((astOperationExpression*)expression)->operation;
         astExpression *lhs = evaluate(((astBinaryExpression*)expression)->operand1);
         astExpression *rhs = evaluate(((astBinaryExpression*)expression)->operand2);
-        if (!lhs) return 0;
-        if (!rhs) return 0;
+        if (!lhs)
+            return nullptr;
+        if (!rhs)
+            return nullptr;
         switch (lhs->type) {
-        case astExpression::kIntConstant:
-            switch (operation) {
-            case kOperator_multiply:       return ICONST_NEW(IVAL(lhs) * IVAL(rhs));
-            case kOperator_divide:         return ICONST_NEW(IVAL(lhs) / IVAL(rhs));
-            case kOperator_modulus:        return ICONST_NEW(IVAL(lhs) % IVAL(rhs));
-            case kOperator_plus:           return ICONST_NEW(IVAL(lhs) + IVAL(rhs));
-            case kOperator_minus:          return ICONST_NEW(IVAL(lhs) - IVAL(rhs));
-            case kOperator_shift_left:     return ICONST_NEW(IVAL(lhs) << IVAL(rhs));
-            case kOperator_shift_right:    return ICONST_NEW(IVAL(lhs) >> IVAL(rhs));
-            case kOperator_less:           return BCONST_NEW(IVAL(lhs) < IVAL(rhs));
-            case kOperator_greater:        return BCONST_NEW(IVAL(lhs) > IVAL(rhs));
-            case kOperator_less_equal:     return BCONST_NEW(IVAL(lhs) <= IVAL(rhs));
-            case kOperator_greater_equal:  return BCONST_NEW(IVAL(lhs) >= IVAL(rhs));
-            case kOperator_equal:          return BCONST_NEW(IVAL(lhs) == IVAL(rhs));
-            case kOperator_not_equal:      return BCONST_NEW(IVAL(lhs) != IVAL(rhs));
-            case kOperator_bit_and:        return ICONST_NEW(IVAL(lhs) & IVAL(rhs));
-            case kOperator_bit_xor:        return ICONST_NEW(IVAL(lhs) ^ IVAL(rhs));
-            case kOperator_logical_and:    return BCONST_NEW(IVAL(lhs) && IVAL(rhs));
-            case kOperator_logical_xor:    return BCONST_NEW(!IVAL(lhs) != !IVAL(rhs));
-            case kOperator_logical_or:     return BCONST_NEW(IVAL(lhs) || IVAL(rhs));
+            case astExpression::kIntConstant:
+                switch (operation) {
+                case kOperator_multiply:       return ICONST_NEW(IVAL(lhs) * IVAL(rhs));
+                case kOperator_divide:         return ICONST_NEW(IVAL(lhs) / IVAL(rhs));
+                case kOperator_modulus:        return ICONST_NEW(IVAL(lhs) % IVAL(rhs));
+                case kOperator_plus:           return ICONST_NEW(IVAL(lhs) + IVAL(rhs));
+                case kOperator_minus:          return ICONST_NEW(IVAL(lhs) - IVAL(rhs));
+                case kOperator_shift_left:     return ICONST_NEW(IVAL(lhs) << IVAL(rhs));
+                case kOperator_shift_right:    return ICONST_NEW(IVAL(lhs) >> IVAL(rhs));
+                case kOperator_less:           return BCONST_NEW(IVAL(lhs) < IVAL(rhs));
+                case kOperator_greater:        return BCONST_NEW(IVAL(lhs) > IVAL(rhs));
+                case kOperator_less_equal:     return BCONST_NEW(IVAL(lhs) <= IVAL(rhs));
+                case kOperator_greater_equal:  return BCONST_NEW(IVAL(lhs) >= IVAL(rhs));
+                case kOperator_equal:          return BCONST_NEW(IVAL(lhs) == IVAL(rhs));
+                case kOperator_not_equal:      return BCONST_NEW(IVAL(lhs) != IVAL(rhs));
+                case kOperator_bit_and:        return ICONST_NEW(IVAL(lhs) & IVAL(rhs));
+                case kOperator_bit_xor:        return ICONST_NEW(IVAL(lhs) ^ IVAL(rhs));
+                case kOperator_logical_and:    return BCONST_NEW(IVAL(lhs) && IVAL(rhs));
+                case kOperator_logical_xor:    return BCONST_NEW(!IVAL(lhs) != !IVAL(rhs));
+                case kOperator_logical_or:     return BCONST_NEW(IVAL(lhs) || IVAL(rhs));
+                default:
+                    fatal("invalid operation in constant expression");
+                    return nullptr;
+                }
+                break;
+            case astExpression::kUIntConstant:
+                switch (operation) {
+                case kOperator_multiply:       return UCONST_NEW(UVAL(lhs) * UVAL(rhs));
+                case kOperator_divide:         return UCONST_NEW(UVAL(lhs) / UVAL(rhs));
+                case kOperator_modulus:        return UCONST_NEW(UVAL(lhs) % UVAL(rhs));
+                case kOperator_plus:           return UCONST_NEW(UVAL(lhs) + UVAL(rhs));
+                case kOperator_minus:          return UCONST_NEW(UVAL(lhs) - UVAL(rhs));
+                case kOperator_shift_left:     return UCONST_NEW(UVAL(lhs) << UVAL(rhs));
+                case kOperator_shift_right:    return UCONST_NEW(UVAL(lhs) >> UVAL(rhs));
+                case kOperator_less:           return BCONST_NEW(UVAL(lhs) < UVAL(rhs));
+                case kOperator_greater:        return BCONST_NEW(UVAL(lhs) > UVAL(rhs));
+                case kOperator_less_equal:     return BCONST_NEW(UVAL(lhs) <= UVAL(rhs));
+                case kOperator_greater_equal:  return BCONST_NEW(UVAL(lhs) >= UVAL(rhs));
+                case kOperator_equal:          return BCONST_NEW(UVAL(lhs) == UVAL(rhs));
+                case kOperator_not_equal:      return BCONST_NEW(UVAL(lhs) != UVAL(rhs));
+                case kOperator_bit_and:        return UCONST_NEW(UVAL(lhs) & UVAL(rhs));
+                case kOperator_bit_xor:        return UCONST_NEW(UVAL(lhs) ^ UVAL(rhs));
+                case kOperator_logical_and:    return BCONST_NEW(UVAL(lhs) && UVAL(rhs));
+                case kOperator_logical_xor:    return BCONST_NEW(!UVAL(lhs) != !UVAL(rhs));
+                case kOperator_logical_or:     return BCONST_NEW(UVAL(lhs) || UVAL(rhs));
+                default:
+                    fatal("invalid operation in constant expression");
+                    return nullptr;
+                }
+                break;
+            case astExpression::kFloatConstant:
+                switch (operation) {
+                case kOperator_multiply:       return FCONST_NEW(FVAL(lhs) * FVAL(rhs));
+                case kOperator_divide:         return FCONST_NEW(FVAL(lhs) / FVAL(rhs));
+                case kOperator_plus:           return FCONST_NEW(FVAL(lhs) + FVAL(rhs));
+                case kOperator_minus:          return FCONST_NEW(FVAL(lhs) - FVAL(rhs));
+                case kOperator_less:           return BCONST_NEW(FVAL(lhs) < FVAL(rhs));
+                case kOperator_greater:        return BCONST_NEW(FVAL(lhs) > FVAL(rhs));
+                case kOperator_less_equal:     return BCONST_NEW(FVAL(lhs) <= FVAL(rhs));
+                case kOperator_greater_equal:  return BCONST_NEW(FVAL(lhs) >= FVAL(rhs));
+                case kOperator_equal:          return BCONST_NEW(FVAL(lhs) == FVAL(rhs));
+                case kOperator_not_equal:      return BCONST_NEW(FVAL(lhs) != FVAL(rhs));
+                case kOperator_logical_and:    return BCONST_NEW(FVAL(lhs) && FVAL(rhs));
+                case kOperator_logical_xor:    return BCONST_NEW(!FVAL(lhs) != !FVAL(rhs));
+                case kOperator_logical_or:     return BCONST_NEW(FVAL(lhs) || FVAL(rhs));
+                default:
+                    fatal("invalid operation in constant expression");
+                    return nullptr;
+                }
+                break;
+            case astExpression::kDoubleConstant:
+                switch (operation) {
+                case kOperator_multiply:       return DCONST_NEW(DVAL(lhs) * DVAL(rhs));
+                case kOperator_divide:         return DCONST_NEW(DVAL(lhs) / DVAL(rhs));
+                case kOperator_plus:           return DCONST_NEW(DVAL(lhs) + DVAL(rhs));
+                case kOperator_minus:          return DCONST_NEW(DVAL(lhs) - DVAL(rhs));
+                case kOperator_less:           return BCONST_NEW(DVAL(lhs) < DVAL(rhs));
+                case kOperator_greater:        return BCONST_NEW(DVAL(lhs) > DVAL(rhs));
+                case kOperator_less_equal:     return BCONST_NEW(DVAL(lhs) <= DVAL(rhs));
+                case kOperator_greater_equal:  return BCONST_NEW(DVAL(lhs) >= DVAL(rhs));
+                case kOperator_equal:          return BCONST_NEW(DVAL(lhs) == DVAL(rhs));
+                case kOperator_not_equal:      return BCONST_NEW(DVAL(lhs) != DVAL(rhs));
+                case kOperator_logical_and:    return BCONST_NEW(DVAL(lhs) && DVAL(rhs));
+                case kOperator_logical_xor:    return BCONST_NEW(!DVAL(lhs) != !DVAL(rhs));
+                case kOperator_logical_or:     return BCONST_NEW(DVAL(lhs) || DVAL(rhs));
+                default:
+                    fatal("invalid operation in constant expression");
+                    return nullptr;
+                }
+                break;
+            case astExpression::kBoolConstant:
+                switch (operation) {
+                case kOperator_equal:          return BCONST_NEW(BVAL(lhs) == BVAL(rhs));
+                case kOperator_not_equal:      return BCONST_NEW(BVAL(lhs) != BVAL(rhs));
+                case kOperator_logical_and:    return BCONST_NEW(BVAL(lhs) && BVAL(rhs));
+                case kOperator_logical_xor:    return BCONST_NEW(!BVAL(lhs) != !BVAL(rhs));
+                case kOperator_logical_or:     return BCONST_NEW(BVAL(lhs) || BVAL(rhs));
+                default:
+                    fatal("invalid operation in constant expression");
+                    return nullptr;
+                }
+                break;
             default:
-                fatal("invalid operation in constant expression");
-                return 0;
-            }
-            break;
-        case astExpression::kUIntConstant:
-            switch (operation) {
-            case kOperator_multiply:       return UCONST_NEW(UVAL(lhs) * UVAL(rhs));
-            case kOperator_divide:         return UCONST_NEW(UVAL(lhs) / UVAL(rhs));
-            case kOperator_modulus:        return UCONST_NEW(UVAL(lhs) % UVAL(rhs));
-            case kOperator_plus:           return UCONST_NEW(UVAL(lhs) + UVAL(rhs));
-            case kOperator_minus:          return UCONST_NEW(UVAL(lhs) - UVAL(rhs));
-            case kOperator_shift_left:     return UCONST_NEW(UVAL(lhs) << UVAL(rhs));
-            case kOperator_shift_right:    return UCONST_NEW(UVAL(lhs) >> UVAL(rhs));
-            case kOperator_less:           return BCONST_NEW(UVAL(lhs) < UVAL(rhs));
-            case kOperator_greater:        return BCONST_NEW(UVAL(lhs) > UVAL(rhs));
-            case kOperator_less_equal:     return BCONST_NEW(UVAL(lhs) <= UVAL(rhs));
-            case kOperator_greater_equal:  return BCONST_NEW(UVAL(lhs) >= UVAL(rhs));
-            case kOperator_equal:          return BCONST_NEW(UVAL(lhs) == UVAL(rhs));
-            case kOperator_not_equal:      return BCONST_NEW(UVAL(lhs) != UVAL(rhs));
-            case kOperator_bit_and:        return UCONST_NEW(UVAL(lhs) & UVAL(rhs));
-            case kOperator_bit_xor:        return UCONST_NEW(UVAL(lhs) ^ UVAL(rhs));
-            case kOperator_logical_and:    return BCONST_NEW(UVAL(lhs) && UVAL(rhs));
-            case kOperator_logical_xor:    return BCONST_NEW(!UVAL(lhs) != !UVAL(rhs));
-            case kOperator_logical_or:     return BCONST_NEW(UVAL(lhs) || UVAL(rhs));
-            default:
-                fatal("invalid operation in constant expression");
-                return 0;
-            }
-            break;
-        case astExpression::kFloatConstant:
-            switch (operation) {
-            case kOperator_multiply:       return FCONST_NEW(FVAL(lhs) * FVAL(rhs));
-            case kOperator_divide:         return FCONST_NEW(FVAL(lhs) / FVAL(rhs));
-            case kOperator_plus:           return FCONST_NEW(FVAL(lhs) + FVAL(rhs));
-            case kOperator_minus:          return FCONST_NEW(FVAL(lhs) - FVAL(rhs));
-            case kOperator_less:           return BCONST_NEW(FVAL(lhs) < FVAL(rhs));
-            case kOperator_greater:        return BCONST_NEW(FVAL(lhs) > FVAL(rhs));
-            case kOperator_less_equal:     return BCONST_NEW(FVAL(lhs) <= FVAL(rhs));
-            case kOperator_greater_equal:  return BCONST_NEW(FVAL(lhs) >= FVAL(rhs));
-            case kOperator_equal:          return BCONST_NEW(FVAL(lhs) == FVAL(rhs));
-            case kOperator_not_equal:      return BCONST_NEW(FVAL(lhs) != FVAL(rhs));
-            case kOperator_logical_and:    return BCONST_NEW(FVAL(lhs) && FVAL(rhs));
-            case kOperator_logical_xor:    return BCONST_NEW(!FVAL(lhs) != !FVAL(rhs));
-            case kOperator_logical_or:     return BCONST_NEW(FVAL(lhs) || FVAL(rhs));
-            default:
-                fatal("invalid operation in constant expression");
-                return 0;
-            }
-            break;
-        case astExpression::kDoubleConstant:
-            switch (operation) {
-            case kOperator_multiply:       return DCONST_NEW(DVAL(lhs) * DVAL(rhs));
-            case kOperator_divide:         return DCONST_NEW(DVAL(lhs) / DVAL(rhs));
-            case kOperator_plus:           return DCONST_NEW(DVAL(lhs) + DVAL(rhs));
-            case kOperator_minus:          return DCONST_NEW(DVAL(lhs) - DVAL(rhs));
-            case kOperator_less:           return BCONST_NEW(DVAL(lhs) < DVAL(rhs));
-            case kOperator_greater:        return BCONST_NEW(DVAL(lhs) > DVAL(rhs));
-            case kOperator_less_equal:     return BCONST_NEW(DVAL(lhs) <= DVAL(rhs));
-            case kOperator_greater_equal:  return BCONST_NEW(DVAL(lhs) >= DVAL(rhs));
-            case kOperator_equal:          return BCONST_NEW(DVAL(lhs) == DVAL(rhs));
-            case kOperator_not_equal:      return BCONST_NEW(DVAL(lhs) != DVAL(rhs));
-            case kOperator_logical_and:    return BCONST_NEW(DVAL(lhs) && DVAL(rhs));
-            case kOperator_logical_xor:    return BCONST_NEW(!DVAL(lhs) != !DVAL(rhs));
-            case kOperator_logical_or:     return BCONST_NEW(DVAL(lhs) || DVAL(rhs));
-            default:
-                fatal("invalid operation in constant expression");
-                return 0;
-            }
-            break;
-        case astExpression::kBoolConstant:
-            switch (operation) {
-            case kOperator_equal:          return BCONST_NEW(BVAL(lhs) == BVAL(rhs));
-            case kOperator_not_equal:      return BCONST_NEW(BVAL(lhs) != BVAL(rhs));
-            case kOperator_logical_and:    return BCONST_NEW(BVAL(lhs) && BVAL(rhs));
-            case kOperator_logical_xor:    return BCONST_NEW(!BVAL(lhs) != !BVAL(rhs));
-            case kOperator_logical_or:     return BCONST_NEW(BVAL(lhs) || BVAL(rhs));
-            default:
-                fatal("invalid operation in constant expression");
-                return 0;
-            }
-            break;
+                fatal("invalid expression");
+                return nullptr;
         }
     } else {
         return evaluate(expression);
     }
-    return 0;
+    return nullptr;
 }
 
 void parser::fatal(const char *fmt, ...) {
     // Format banner
-    char *banner = 0;
+    char *banner = nullptr;
     int bannerLength = allocfmt(&banner, "%s:%zu:%zu: error: ", m_fileName, m_lexer.line(), m_lexer.column());
     if (bannerLength == -1) {
         m_error = m_oom;
@@ -257,7 +263,7 @@ void parser::fatal(const char *fmt, ...) {
     }
 
     // Format message
-    char *message = 0;
+    char *message = nullptr;
     va_list va;
     va_start(va, fmt);
     int messageLength = allocvfmt(&message, fmt, va);
@@ -303,16 +309,16 @@ bool parser::isBuiltin() const {
 #define TYPENAME(...)
 
 /// The parser entry point
-CHECK_RETURN astTU *parser::parse(int type, vector<const char*>* builtinVariables) {
+astTU *parser::parse(int type, vector<const char*>* builtinVariables) {
     m_ast = new astTU(type);
     m_scopes.push_back(scope());
     m_defines.push_back(defineScope());
 
     if (builtinVariables) {
-        for (size_t i = 0; i < (*builtinVariables).size(); i++) {
-            astDefineStatement *define = GC_NEW(astDefineStatement) astDefineStatement();
+        for (auto & i : *builtinVariables) {
+            auto *define = GC_NEW astDefineStatement();
 
-            define->name = strnew((*builtinVariables)[i]);
+            define->name = strnew(i);
 
             m_defines.back().push_back(define);
         }
@@ -323,7 +329,7 @@ CHECK_RETURN astTU *parser::parse(int type, vector<const char*>* builtinVariable
 
         if (m_lexer.error()) {
             fatal("%s", m_lexer.error());
-            return 0;
+            return nullptr;
         }
 
         if (isType(kType_eof)) {
@@ -334,23 +340,23 @@ CHECK_RETURN astTU *parser::parse(int type, vector<const char*>* builtinVariable
             if (m_token.asDirective.type == directive::kVersion) {
                 if (m_ast->versionDirective) {
                     fatal("Multiple version directives not allowed");
-                    return 0;
+                    return nullptr;
                 }
-                astVersionDirective *directive = GC_NEW(astVersionDirective) astVersionDirective();
+                auto *directive = GC_NEW astVersionDirective();
                 directive->version = m_token.asDirective.asVersion.version;
                 directive->type = m_token.asDirective.asVersion.type;
                 m_ast->versionDirective = directive;
                 m_ast->nodes.push_back(directive);
                 continue;
             } else if (m_token.asDirective.type == directive::kExtension) {
-                astExtensionDirective *extension = GC_NEW(astExtensionDirective) astExtensionDirective();
+                auto *extension = GC_NEW astExtensionDirective();
                 extension->behavior = m_token.asDirective.asExtension.behavior;
                 extension->name = strnew(m_token.asDirective.asExtension.name);
                 m_ast->extensionDirectives.push_back(extension);
                 m_ast->nodes.push_back(extension);
                 continue;
             } else if (m_token.asDirective.type == directive::kInclude) {
-                astIncludeStatement* include = GC_NEW(astIncludeStatement) astIncludeStatement();
+                auto* include = GC_NEW astIncludeStatement();
                 include->name = strnew(m_token.asDirective.asInclude.file);
                 m_ast->statements.push_back(include);
                 m_ast->nodes.push_back(include);
@@ -359,7 +365,7 @@ CHECK_RETURN astTU *parser::parse(int type, vector<const char*>* builtinVariable
                 astDefineStatement* define = parseDefineDirective();
 
                 if (!define) {
-                    return 0;
+                    return nullptr;
                 }
 
                 m_ast->statements.push_back(define);
@@ -369,7 +375,7 @@ CHECK_RETURN astTU *parser::parse(int type, vector<const char*>* builtinVariable
                 astIfDefDirectiveStatement *ifdef = parseIfDefDirective();
 
                 if (!ifdef) {
-                    return 0;
+                    return nullptr;
                 }
 
                 m_ast->statements.push_back(ifdef);
@@ -379,7 +385,7 @@ CHECK_RETURN astTU *parser::parse(int type, vector<const char*>* builtinVariable
                 astIfNDefDirectiveStatement *ifndef = parseIfNDefDirective();
 
                 if (!ifndef) {
-                    return 0;
+                    return nullptr;
                 }
 
                 m_ast->statements.push_back(ifndef);
@@ -389,7 +395,7 @@ CHECK_RETURN astTU *parser::parse(int type, vector<const char*>* builtinVariable
                 astIfDirectiveStatement *ifdef = parseIfDirective();
 
                 if (!ifdef) {
-                    return 0;
+                    return nullptr;
                 }
 
                 m_ast->statements.push_back(ifdef);
@@ -397,18 +403,17 @@ CHECK_RETURN astTU *parser::parse(int type, vector<const char*>* builtinVariable
                 continue;
             } else {
                 fatal("unexpected directive %d", m_token.asDirective.type);
-                return 0;
+                return nullptr;
             }
         }
 
         vector<topLevel> items;
         if (!parseTopLevel(items, &m_ast->nodes))
-            return 0;
+            return nullptr;
 
         if (isType(kType_semicolon)) {
-            for (size_t i = 0; i < items.size(); i++) {
-                topLevel &parse = items[i];
-                astGlobalVariable *global = GC_NEW(astVariable) astGlobalVariable();
+            for (auto & parse : items) {
+                auto *global = GC_NEW astGlobalVariable();
                 global->storage = parse.storage;
                 global->auxiliary = parse.auxiliary;
                 global->memory = parse.memory;
@@ -421,7 +426,7 @@ CHECK_RETURN astTU *parser::parse(int type, vector<const char*>* builtinVariable
                 global->layoutQualifiers = parse.layoutQualifiers;
                 if (parse.initialValue) {
                     if (!(global->initialValue = evaluate(parse.initialValue)))
-                        return 0;
+                        return nullptr;
                 }
                 global->isArray = parse.isArray;
                 global->arraySizes = parse.arraySizes;
@@ -432,20 +437,20 @@ CHECK_RETURN astTU *parser::parse(int type, vector<const char*>* builtinVariable
         } else if (isOperator(kOperator_paranthesis_begin)) {
             astFunction *function = parseFunction(items.front());
             if (!function)
-                return 0;
+                return nullptr;
             m_ast->functions.push_back(function);
             m_ast->nodes.push_back(function);
         } else if (isType(kType_whitespace) || isType(kType_end_of_line)) {
             continue; // whitespace tokens will be used later for the preprocessor
         } else {
             fatal("syntax error at top level %d", m_token.asKeyword);
-            return 0;
+            return nullptr;
         }
     }
     return m_ast;
 }
 
-CHECK_RETURN bool parser::parseStorage(topLevel &current) {
+bool parser::parseStorage(topLevel &current) {
     // const, in, out, attribute, uniform, varying, buffer, shared
     if (isKeyword(kKeyword_const)) {
         current.storage = kConst;
@@ -475,7 +480,7 @@ CHECK_RETURN bool parser::parseStorage(topLevel &current) {
     return true;
 }
 
-CHECK_RETURN bool parser::parseAuxiliary(topLevel &current) {
+bool parser::parseAuxiliary(topLevel &current) {
     // centroid, sample, patch
     if (isKeyword(kKeyword_centroid)) {
         current.auxiliary = kCentroid;
@@ -490,7 +495,7 @@ CHECK_RETURN bool parser::parseAuxiliary(topLevel &current) {
     return true;
 }
 
-CHECK_RETURN bool parser::parseInterpolation(topLevel &current) {
+bool parser::parseInterpolation(topLevel &current) {
     // smooth, flat, noperspective
     if (isKeyword(kKeyword_smooth)) {
         current.interpolation = kSmooth;
@@ -505,7 +510,7 @@ CHECK_RETURN bool parser::parseInterpolation(topLevel &current) {
     return true;
 }
 
-CHECK_RETURN bool parser::parsePrecision(topLevel &current) {
+bool parser::parsePrecision(topLevel &current) {
     // highp, mediump, lowp
     if (isKeyword(kKeyword_highp)) {
         current.precision = kHighp;
@@ -520,7 +525,7 @@ CHECK_RETURN bool parser::parsePrecision(topLevel &current) {
     return true;
 }
 
-CHECK_RETURN bool parser::parseInvariant(topLevel &current) {
+bool parser::parseInvariant(topLevel &current) {
     // invariant
     if (isKeyword(kKeyword_invariant)) {
         current.isInvariant = true;
@@ -529,7 +534,7 @@ CHECK_RETURN bool parser::parseInvariant(topLevel &current) {
     return true;
 }
 
-CHECK_RETURN bool parser::parsePrecise(topLevel &current) {
+bool parser::parsePrecise(topLevel &current) {
     // precise
     if (isKeyword(kKeyword_precise)) {
         current.isPrecise = true;
@@ -538,7 +543,7 @@ CHECK_RETURN bool parser::parsePrecise(topLevel &current) {
     return true;
 }
 
-CHECK_RETURN bool parser::parseMemory(topLevel &current) {
+bool parser::parseMemory(topLevel &current) {
     // coherent, volatile, restrict, readonly, writeonly
     if (isKeyword(kKeyword_coherent)) {
         current.memory |= kCoherent;
@@ -608,7 +613,7 @@ static struct {
     { "depth_unchanged",            false }
 };
 
-CHECK_RETURN bool parser::parseLayout(topLevel &current) {
+bool parser::parseLayout(topLevel &current) {
     vector<astLayoutQualifier*> &qualifiers = current.layoutQualifiers;
     if (isKeyword(kKeyword_layout)) {
         if (!next()) // skip 'layout'
@@ -620,7 +625,7 @@ CHECK_RETURN bool parser::parseLayout(topLevel &current) {
         if (!next()) // skip '('
             return false;
         while (!isOperator(kOperator_paranthesis_end)) {
-            astLayoutQualifier *qualifier = GC_NEW(astLayoutQualifier) astLayoutQualifier();
+            auto *qualifier = GC_NEW astLayoutQualifier();
 
             // "The tokens used for layout-qualifier-name are identifiers,
             //  not keywords, however, the shared keyword is allowed as a
@@ -631,7 +636,7 @@ CHECK_RETURN bool parser::parseLayout(topLevel &current) {
             int found = -1;
             qualifier->name = strnew(isType(kType_identifier) ? m_token.asIdentifier : "shared");
             for (size_t i = 0; i < sizeof(kLayoutQualifiers)/sizeof(kLayoutQualifiers[0]); i++) {
-                if (strcmp(qualifier->name, kLayoutQualifiers[i].qualifier))
+                if (strcmp(qualifier->name, kLayoutQualifiers[i].qualifier) != 0)
                     continue;
                 found = int(i);
                 break;
@@ -728,7 +733,7 @@ static bool isReservedKeyword(int keyword) {
         || keyword == kKeyword_using;
 }
 
-CHECK_RETURN bool parser::parseTopLevelItem(topLevel &level, vector<astBase*>* nodes, topLevel *continuation, bool allow_undefined) {
+bool parser::parseTopLevelItem(topLevel &level, vector<astBase*>* nodes, topLevel *continuation, bool allow_undefined) {
     vector<topLevel> items;
     while (!isBuiltin() && !isType(kType_identifier)) {
         // If this is an empty file don't get caught in this loop indefinitely
@@ -772,7 +777,7 @@ CHECK_RETURN bool parser::parseTopLevelItem(topLevel &level, vector<astBase*>* n
                 level.type = unique;
             }
         } else if (isKeyword(kKeyword_struct)) {
-            if (!next()) return 0; // skip struct
+            if (!next()) return false; // skip struct
             astStruct *unique = parseStruct();
             if (!unique)
                 return false;
@@ -796,8 +801,7 @@ CHECK_RETURN bool parser::parseTopLevelItem(topLevel &level, vector<astBase*>* n
         level.arraySizes.erase(level.arraySizes.begin() + level.arrayOnTypeOffset, level.arraySizes.end());
     }
 
-    for (size_t i = 0; i < items.size(); i++) {
-        topLevel &next = items[i];
+    for (auto & next : items) {
         const int storage = level.storage != kStorageUnknown ? level.storage : next.storage;
         if (m_ast->type == astTU::kVertex && storage == kIn) {
             // "It's a compile-time error to use any auxiliary or interpolation
@@ -813,7 +817,7 @@ CHECK_RETURN bool parser::parseTopLevelItem(topLevel &level, vector<astBase*>* n
         if (m_ast->type == astTU::kFragment && storage == kOut) {
             // "It's a compile-time error to use auxiliary storage qualifiers or
             //  interpolation qualifiers on an output in a fragment shader."
-            if (level.auxiliary != -1 || next.auxiliary != -1) {
+            if (level.auxiliary != kAuxiliaryUnknown || next.auxiliary != kAuxiliaryUnknown) {
                 fatal("cannot use auxiliary storage qualifier on fragment shader output");
                 return false;
             } else if (level.interpolation != -1 || next.interpolation != -1) {
@@ -953,13 +957,13 @@ CHECK_RETURN bool parser::parseTopLevelItem(topLevel &level, vector<astBase*>* n
     return true;
 }
 
-CHECK_RETURN bool parser::parseTopLevel(vector<topLevel> &items, vector<astBase*>* nodes, bool allow_undefined) {
+bool parser::parseTopLevel(vector<topLevel> &items, vector<astBase*>* nodes, bool allow_undefined) {
     topLevel item;
-    if (!parseTopLevelItem(item, nodes, 0, allow_undefined))
+    if (!parseTopLevelItem(item, nodes, nullptr, allow_undefined))
         return false;
     if (item.type)
         items.push_back(item);
-    while (items.size() && isOperator(kOperator_comma)) {
+    while (!items.empty() && isOperator(kOperator_comma)) {
         if (!next())
             return false; // skip ','
         topLevel nextItem;
@@ -972,32 +976,31 @@ CHECK_RETURN bool parser::parseTopLevel(vector<topLevel> &items, vector<astBase*
 }
 
 template<typename T>
-CHECK_RETURN T *parser::parseBlock(const char* type) {
-    T *unique = GC_NEW(astType) T;
+T *parser::parseBlock(const char* type) {
+    T *unique = GC_NEW T;
 
     if (isType(kType_identifier)) {
         unique->name = strnew(m_token.asIdentifier);
-        if (!next()) return 0; // skip identifier
+        if (!next()) return nullptr; // skip identifier
     }
 
     if (!isType(kType_scope_begin)) {
         fatal("expected '{' for %s definition", type);
-        return 0;
+        return nullptr;
     }
 
-    if (!next()) return 0; // skip '{'
+    if (!next()) return nullptr; // skip '{'
 
     vector<topLevel> items;
     while (!isType(kType_scope_end)) {
         if (!parseTopLevel(items, &m_ast->nodes))
-            return 0;
+            return nullptr;
         if (!next())
-            return 0;
+            return nullptr;
     }
 
-    for (size_t i = 0; i < items.size(); i++) {
-        topLevel &parse = items[i];
-        astVariable *field = GC_NEW(astVariable) astVariable(astVariable::kField);
+    for (auto & parse : items) {
+        auto *field = GC_NEW astVariable(astVariable::kField);
         field->baseType = parse.type;
         field->name = strnew(parse.name);
         field->isPrecise = parse.isPrecise;
@@ -1006,58 +1009,53 @@ CHECK_RETURN T *parser::parseBlock(const char* type) {
         unique->fields.push_back(field);
     }
 
-    if (!next()) return 0; // skip '}'
+    if (!next()) return nullptr; // skip '}'
 
     return unique;
 }
 
-CHECK_RETURN astStruct *parser::parseStruct() {
+astStruct *parser::parseStruct() {
     return parseBlock<astStruct>("structure");
 }
 
-CHECK_RETURN astInterfaceBlock *parser::parseInterfaceBlock(int storage) {
-    astInterfaceBlock* unique = 0;
+astInterfaceBlock *parser::parseInterfaceBlock(int storage) {
+    astInterfaceBlock* unique = nullptr;
     switch (storage) {
-    case kIn:
-        unique = parseBlock<astInterfaceBlock>("input block");
-        break;
-    case kOut:
-        unique = parseBlock<astInterfaceBlock>("outout block");
-        break;
-    case kUniform:
-        unique = parseBlock<astInterfaceBlock>("uniform block");
-        break;
-    case kBuffer:
-        unique = parseBlock<astInterfaceBlock>("buffer block");
-        break;
-    }
-
-    if (!unique) {
-        return 0;
+        case kIn:
+            unique = parseBlock<astInterfaceBlock>("input block");
+            break;
+        case kOut:
+            unique = parseBlock<astInterfaceBlock>("outout block");
+            break;
+        case kUniform:
+            unique = parseBlock<astInterfaceBlock>("uniform block");
+            break;
+        case kBuffer:
+            unique = parseBlock<astInterfaceBlock>("buffer block");
+            break;
+        default:
+            return nullptr;
     }
 
     // When there's no identifier then implicitly declare these as globals
     // in their respective places.
     if (!isType(kType_identifier)) {
-        const size_t n_fields = unique->fields.size();
-        for (size_t i = 0; i < n_fields; i++) {
+        for (auto & field : unique->fields) {
             // Check if the variable already exists
-            astVariable *variable = unique->fields[i];
+            astVariable *variable = field;
             if (findVariable(variable->name)) {
                 fatal("'%s` is already declared in this scope", variable->name);
-                return 0;
+                return nullptr;
             }
-            m_scopes.back().push_back(unique->fields[i]);
+            m_scopes.back().push_back(field);
         }
     }
 
     unique->storage = storage;
     return unique;
-
-    return 0;
 }
 
-CHECK_RETURN astExpression *parser::parseBinary(int lhsPrecedence, astExpression *lhs, endCondition end, bool allow_undefined) {
+astExpression *parser::parseBinary(int lhsPrecedence, astExpression *lhs, endCondition end, bool allow_undefined) {
     // Precedence climbing
     while (!isEndCondition(end)) {
         int binaryPrecedence = m_token.precedence();
@@ -1066,13 +1064,13 @@ CHECK_RETURN astExpression *parser::parseBinary(int lhsPrecedence, astExpression
 
         astBinaryExpression *expression = createExpression();
         if (!next(!(end & kEndConditionLineFeed)))
-            return 0;
+            return nullptr;
 
         astExpression *rhs = parseUnary(end, allow_undefined);
         if (!rhs)
-            return 0;
+            return nullptr;
         if (!next(!(end & kEndConditionLineFeed)))
-            return 0;
+            return nullptr;
 
         if (((astExpression*)expression)->type == astExpression::kAssign) {
             astExpression *find = lhs;
@@ -1086,21 +1084,21 @@ CHECK_RETURN astExpression *parser::parseBinary(int lhsPrecedence, astExpression
             if (find->type == astExpression::kVariableIdentifier) {
                 astVariable *variable = ((astVariableIdentifier*)lhs)->variable;
                 if (variable->type == astVariable::kGlobal) {
-                    astGlobalVariable *global = (astGlobalVariable*)variable;
+                    auto *global = (astGlobalVariable*)variable;
                     // "It's a compile-time error to write to a variable declared as an input"
                     if (global->storage == kIn) {
                         fatal("cannot write to a variable declared as input");
-                        return 0;
+                        return nullptr;
                     }
                     // "It's a compile-time error to write to a const variable outside of its declaration."
                     if (global->storage == kConst) {
                         fatal("cannot write to a const variable outside of its declaration");
-                        return 0;
+                        return nullptr;
                     }
                 }
             } else if (find->type != astExpression::kDefineIdentifier && (allow_undefined && find->type != astExpression::kUnknownIdentifier)) {
                 fatal("not a valid lvalue");
-                return 0;
+                return nullptr;
             }
         }
 
@@ -1109,7 +1107,7 @@ CHECK_RETURN astExpression *parser::parseBinary(int lhsPrecedence, astExpression
         // climb
         if (binaryPrecedence < rhsPrecedence) {
             if (!(rhs = parseBinary(binaryPrecedence + 1, rhs, end, allow_undefined)))
-                return 0;
+                return nullptr;
         }
 
         expression->operand1 = lhs;
@@ -1119,28 +1117,28 @@ CHECK_RETURN astExpression *parser::parseBinary(int lhsPrecedence, astExpression
     return lhs;
 }
 
-CHECK_RETURN astExpression *parser::parseUnaryPrefix(endCondition condition, bool allow_undefined) {
+astExpression *parser::parseUnaryPrefix(endCondition condition, bool allow_undefined) {
     if (isOperator(kOperator_paranthesis_begin)) {
-        if (!next()) return 0; // skip '('
+        if (!next()) return nullptr; // skip '('
         return parseExpression(kEndConditionParanthesis, allow_undefined);
     } else if (isOperator(kOperator_logical_not)) {
-        if (!next()) return 0; // skip '!'
-        return GC_NEW(astExpression) astUnaryLogicalNotExpression(parseUnary(condition));
+        if (!next()) return nullptr; // skip '!'
+        return GC_NEW astUnaryLogicalNotExpression(parseUnary(condition));
     } else if (isOperator(kOperator_bit_not)) {
-        if (!next()) return 0; // skip '~'
-        return GC_NEW(astExpression) astUnaryBitNotExpression(parseUnary(condition));
+        if (!next()) return nullptr; // skip '~'
+        return GC_NEW astUnaryBitNotExpression(parseUnary(condition));
     } else if (isOperator(kOperator_plus)) {
-        if (!next()) return 0; // skip '+'
-        return GC_NEW(astExpression) astUnaryPlusExpression(parseUnary(condition));
+        if (!next()) return nullptr; // skip '+'
+        return GC_NEW astUnaryPlusExpression(parseUnary(condition));
     } else if (isOperator(kOperator_minus)) {
-        if (!next()) return 0; // skip '-'
-        return GC_NEW(astExpression) astUnaryMinusExpression(parseUnary(condition, allow_undefined));
+        if (!next()) return nullptr; // skip '-'
+        return GC_NEW astUnaryMinusExpression(parseUnary(condition, allow_undefined));
     } else if (isOperator(kOperator_increment)) {
-        if (!next()) return 0; // skip '++'
-        return GC_NEW(astExpression) astPrefixIncrementExpression(parseUnary(condition));
+        if (!next()) return nullptr; // skip '++'
+        return GC_NEW astPrefixIncrementExpression(parseUnary(condition));
     } else if (isOperator(kOperator_decrement)) {
-        if (!next()) return 0; // skip '--'
-        return GC_NEW(astExpression) astPrefixDecrementExpression(parseUnary(condition));
+        if (!next()) return nullptr; // skip '--'
+        return GC_NEW astPrefixDecrementExpression(parseUnary(condition));
     } else if (isBuiltin()) {
         return parseConstructorCall(allow_undefined);
     } else if (isType(kType_identifier)) {
@@ -1154,14 +1152,14 @@ CHECK_RETURN astExpression *parser::parseUnaryPrefix(endCondition condition, boo
         } else {
             astVariable *find = findVariable(m_token.asIdentifier);
             if (find)
-                return GC_NEW(astExpression) astVariableIdentifier(find);
+                return GC_NEW astVariableIdentifier(find);
             astDefineStatement* define = findDefine(m_token.asIdentifier);
             if (define)
-                return GC_NEW(astExpression) astDefineIdentifier(define);
+                return GC_NEW astDefineIdentifier(define);
             if (allow_undefined)
-                return GC_NEW(astExpression) astUnknownIdentifier(strnew(m_token.asIdentifier));
+                return GC_NEW astUnknownIdentifier(strnew(m_token.asIdentifier));
             fatal("`%s' was not declared in this scope", m_token.asIdentifier);
-            return 0;
+            return nullptr;
         }
     } else if (isKeyword(kKeyword_true)) {
         return BCONST_NEW(true);
@@ -1176,63 +1174,66 @@ CHECK_RETURN astExpression *parser::parseUnaryPrefix(endCondition condition, boo
     } else if (isType(kType_constant_double)) {
         return DCONST_NEW(m_token.asDouble);
     } else if (condition == kEndConditionBracket) {
-        return 0;
+        return nullptr;
     }
     fatal("syntax error during unary prefix");
-    return 0;
+    return nullptr;
 }
 
 astType* parser::getType(astExpression *expression)
 {
-    switch (expression->type)
-    {
-    case astExpression::kVariableIdentifier:
-        return ((astVariableIdentifier*)expression)->variable->baseType;
-    case astExpression::kFieldOrSwizzle:
-        return getType(((astFieldOrSwizzle*)expression)->operand);
-    case astExpression::kArraySubscript:
-        return getType(((astArraySubscript*)expression)->operand);
-    case astExpression::kFunctionCall:
-        for (size_t i = 0; i < m_ast->functions.size(); i++) {
-            if (strcmp(m_ast->functions[i]->name, ((astFunctionCall*)expression)->name))
-                continue;
-            return m_ast->functions[i]->returnType;
-        }
-        break;
-    case astExpression::kConstructorCall:
-        return ((astConstructorCall*)expression)->type;
+    switch (expression->type) {
+        case astExpression::kVariableIdentifier:
+            return ((astVariableIdentifier*)expression)->variable->baseType;
+        case astExpression::kFieldOrSwizzle:
+            return getType(((astFieldOrSwizzle*)expression)->operand);
+        case astExpression::kArraySubscript:
+            return getType(((astArraySubscript*)expression)->operand);
+        case astExpression::kFunctionCall:
+            for (auto & function : m_ast->functions) {
+                if (strcmp(function->name, ((astFunctionCall*)expression)->name) != 0)
+                    continue;
+                return function->returnType;
+            }
+            break;
+        case astExpression::kConstructorCall:
+            return ((astConstructorCall*)expression)->type;
+
+        default:
+            return nullptr;
     }
-    return 0;
+
+    return nullptr;
 }
 
-CHECK_RETURN astExpression *parser::parseUnary(endCondition end, bool allow_undefined) {
+astExpression *parser::parseUnary(endCondition end, bool allow_undefined) {
     astExpression *operand = parseUnaryPrefix(end, allow_undefined);
     if (!operand)
-        return 0;
+        return nullptr;
     for (;;) {
         token peek = m_lexer.peek(!(end & kEndConditionLineFeed));
         if (IS_OPERATOR(peek, kOperator_dot)) {
-            if (!next()) return 0; // skip last
-            if (!next()) return 0; // skip '.'
+            if (!next()) return nullptr; // skip last
+            if (!next()) return nullptr; // skip '.'
             if (!isType(kType_identifier)) {
                 fatal("expected field identifier or swizzle after `.'");
-                return 0;
+                return nullptr;
             }
-            astFieldOrSwizzle *expression = GC_NEW(astExpression) astFieldOrSwizzle();
+            auto *expression = GC_NEW astFieldOrSwizzle();
 
             astType *type = getType(operand);
-            if (type && !type->typeType == astType::kBuiltin) {
-                astVariable *field = 0;
-                astStruct *kind = (astStruct*)type;
-                for (size_t i = 0; i < kind->fields.size(); i++) {
-                    if (strcmp(kind->fields[i]->name, m_token.asIdentifier))
+            if (type && type->typeType != astType::kBuiltin) {
+                astVariable *field = nullptr;
+                auto *kind = (astStruct*)type;
+                for (auto & i : kind->fields) {
+                    if (strcmp(i->name, m_token.asIdentifier) != 0)
                         continue;
-                    field = kind->fields[i];
+                    field = i;
                     break;
                 }
                 if (!field) {
                     fatal("field `%s' does not exist in structure `%s'", m_token.asIdentifier, kind->name);
-                    return 0;
+                    return nullptr;
                 }
             }
 
@@ -1240,44 +1241,44 @@ CHECK_RETURN astExpression *parser::parseUnary(endCondition end, bool allow_unde
             expression->name = strnew(m_token.asIdentifier);
             operand = expression;
         } else if (IS_OPERATOR(peek, kOperator_increment)) {
-            if (!next()) return 0; // skip last
-            operand = GC_NEW(astExpression) astPostIncrementExpression(operand);
+            if (!next()) return nullptr; // skip last
+            operand = GC_NEW astPostIncrementExpression(operand);
         } else if (IS_OPERATOR(peek, kOperator_decrement)) {
-            if (!next()) return 0; // skip last
-            operand = GC_NEW(astExpression) astPostDecrementExpression(operand);
+            if (!next()) return nullptr; // skip last
+            operand = GC_NEW astPostDecrementExpression(operand);
         } else if (IS_OPERATOR(peek, kOperator_bracket_begin)) {
-            if (!next()) return 0; // skip last
-            if (!next()) return 0; // skip '['
-            astArraySubscript *expression = GC_NEW(astExpression) astArraySubscript();
+            if (!next()) return nullptr; // skip last
+            if (!next()) return nullptr; // skip '['
+            auto *expression = GC_NEW astArraySubscript();
             astExpression *find = operand;
             while (find->type == astExpression::kArraySubscript)
                 find = ((astArraySubscript*)find)->operand;
             if (find->type != astExpression::kVariableIdentifier) {
                 fatal("cannot be subscripted");
-                return 0;
+                return nullptr;
             }
             expression->operand = operand;
             if (!(expression->index = parseExpression(kEndConditionBracket)))
-                return 0;
+                return nullptr;
             if (isConstant(expression->index)) {
                 if (!(expression->index = evaluate(expression->index)))
-                    return 0;
+                    return nullptr;
             }
             operand = expression;
         } else if (IS_OPERATOR(peek, kOperator_questionmark)) {
-            if (!next()) return 0; // skip last
-            if (!next()) return 0; // skip '?'
-            astTernaryExpression *expression = GC_NEW(astExpression) astTernaryExpression();
+            if (!next()) return nullptr; // skip last
+            if (!next()) return nullptr; // skip '?'
+            auto *expression = GC_NEW astTernaryExpression();
             expression->condition = operand;
             expression->onTrue = parseExpression(kEndConditionColon);
             if (!isOperator(kOperator_colon)) {
                 fatal("expected `:' for else case in ternary statement");
-                return 0;
+                return nullptr;
             }
-            if (!next()) return 0; // skip ':'
+            if (!next()) return nullptr; // skip ':'
             if (!(expression->onFalse = parseUnary(end))) {
                 fatal("expected expression after `:' in ternary statement");
-                return 0;
+                return nullptr;
             }
             operand = expression;
         } else {
@@ -1287,100 +1288,100 @@ CHECK_RETURN astExpression *parser::parseUnary(endCondition end, bool allow_unde
     return operand;
 }
 
-CHECK_RETURN astExpression *parser::parseExpression(endCondition condition, bool allow_undefined) {
+astExpression *parser::parseExpression(endCondition condition, bool allow_undefined) {
     astExpression *lhs = parseUnary(condition, allow_undefined);
     if (!lhs)
-        return 0;
+        return nullptr;
     if (!next(!(condition & kEndConditionLineFeed))) // skip last
-        return 0;
+        return nullptr;
     return parseBinary(0, lhs, condition, allow_undefined);
 }
 
-CHECK_RETURN astExpressionStatement *parser::parseExpressionStatement(endCondition condition, bool allow_undefined) {
+astExpressionStatement *parser::parseExpressionStatement(endCondition condition, bool allow_undefined) {
     astExpression *expression = parseExpression(condition, allow_undefined);
-    return expression ? GC_NEW(astStatement) astExpressionStatement(expression) : 0;
+    return expression ? GC_NEW astExpressionStatement(expression) : 0;
 }
 
-CHECK_RETURN astConstantExpression *parser::parseArraySize(bool allow_undefined) {
+astConstantExpression *parser::parseArraySize(bool allow_undefined) {
     if (!next()) // skip '['
-        return 0;
+        return nullptr;
     return parseExpression(kEndConditionBracket, allow_undefined);
 }
 
-CHECK_RETURN astCompoundStatement *parser::parseCompoundStatement() {
-    astCompoundStatement *statement = GC_NEW(astStatement) astCompoundStatement();
+astCompoundStatement *parser::parseCompoundStatement() {
+    auto *statement = GC_NEW astCompoundStatement();
     if (!next()) // skip '{'
-        return 0;
+        return nullptr;
     while (!isType(kType_scope_end) && !(isType(kType_directive) && (m_token.asDirective.type == directive::kEndIf || m_token.asDirective.type == directive::kElse || m_token.asDirective.type == directive::kElIf))) {
         astStatement *nextStatement = parseStatement();
-        if (!nextStatement) return 0;
+        if (!nextStatement) return nullptr;
         statement->statements.push_back(nextStatement);
         if (!next()) // skip ';'
-            return 0;
+            return nullptr;
     }
     return statement;
 }
 
-CHECK_RETURN astIfStatement *parser::parseIfStatement() {
-    astIfStatement *statement = GC_NEW(astStatement) astIfStatement();
+astIfStatement *parser::parseIfStatement() {
+    auto *statement = GC_NEW astIfStatement();
     if (!next()) // skip 'if'
-        return 0;
+        return nullptr;
     if (!isOperator(kOperator_paranthesis_begin)) {
         fatal("expected `(' after `if'");
-        return 0;
+        return nullptr;
     }
     if (!next()) // skip '('
-        return 0;
+        return nullptr;
     if (!(statement->condition = parseExpression(kEndConditionParanthesis)))
-        return 0;
+        return nullptr;
     if (!next()) // skip ')'
-        return 0;
+        return nullptr;
     statement->thenStatement = parseStatement();
     token peek = m_lexer.peek();
     if (IS_KEYWORD(peek, kKeyword_else)) {
         if (!next()) // skip ';' or '}'
-            return 0;
+            return nullptr;
         if (!next()) // skip 'else'
-            return 0;
+            return nullptr;
         if (!(statement->elseStatement = parseStatement()))
-            return 0;
+            return nullptr;
     }
     return statement;
 }
 
-CHECK_RETURN astSwitchStatement *parser::parseSwitchStatement() {
-    astSwitchStatement *statement = GC_NEW(astStatement) astSwitchStatement();
+astSwitchStatement *parser::parseSwitchStatement() {
+    auto *statement = GC_NEW astSwitchStatement();
     if (!next()) // skip 'switch'
-        return 0;
+        return nullptr;
     if (!isOperator(kOperator_paranthesis_begin)) {
         fatal("expected `(' after `switch'");
-        return 0;
+        return nullptr;
     }
     if (!next()) // skip '('
-        return 0;
+        return nullptr;
     if (!(statement->expression = parseExpression(kEndConditionParanthesis)))
-        return 0;
+        return nullptr;
     if (!next()) // skip next
-        return 0;
+        return nullptr;
     if (!isType(kType_scope_begin)) {
         fatal("expected `{' after `)'");
-        return 0;
+        return nullptr;
     }
     if (!next()) // skip '{'
-        return 0;
+        return nullptr;
 
     vector<int> seenInts;
     vector<unsigned int> seenUInts;
     bool hadDefault = false;
     while (!isType(kType_scope_end)) {
         astStatement *nextStatement = parseStatement();
-        if (!nextStatement) return 0;
+        if (!nextStatement) return nullptr;
         if (nextStatement->type == astStatement::kCaseLabel) {
-            astCaseLabelStatement *caseLabel = (astCaseLabelStatement*)nextStatement;
+            auto *caseLabel = (astCaseLabelStatement*)nextStatement;
             if (!caseLabel->isDefault) {
                 if (!isConstant(caseLabel->condition)) {
                     fatal("case label is not a valid constant expression");
-                    return 0;
+                    return nullptr;
                 }
                 astConstantExpression *value = evaluate(caseLabel->condition);
                 // "It is a compile-time error to have two case label constant-expression of equal value"
@@ -1388,187 +1389,187 @@ CHECK_RETURN astSwitchStatement *parser::parseSwitchStatement() {
                     const int val = IVAL(value);
                     if (glsl::find(seenInts.begin(), seenInts.end(), val) != seenInts.end()) {
                         fatal("duplicate case label `%d'", val);
-                        return 0;
+                        return nullptr;
                     }
                     seenInts.push_back(val);
                 } else if (value->type == astExpression::kUIntConstant) {
                     const unsigned int val = UVAL(value);
                     if (glsl::find(seenUInts.begin(), seenUInts.end(), val) != seenUInts.end()) {
                         fatal("duplicate case label `%u'", val);
-                        return 0;
+                        return nullptr;
                     }
                     seenUInts.push_back(val);
                 } else {
                     fatal("case label must be scalar `int' or `uint'");
-                    return 0;
+                    return nullptr;
                 }
             } else {
                 // "It's a compile-time error to have more than one default"
                 if (hadDefault) {
                     fatal("duplicate `default' case label");
-                    return 0;
+                    return nullptr;
                 }
                 hadDefault = true;
             }
         }
         statement->statements.push_back(nextStatement);
         if (!next())
-            return 0;
+            return nullptr;
     }
 
     // TODO: verify scope of where switches are found
     return statement;
 }
 
-CHECK_RETURN astCaseLabelStatement *parser::parseCaseLabelStatement() {
-    astCaseLabelStatement *statement = GC_NEW(astStatement) astCaseLabelStatement();
+astCaseLabelStatement *parser::parseCaseLabelStatement() {
+    auto *statement = GC_NEW astCaseLabelStatement();
     if (isKeyword(kKeyword_default)) {
         statement->isDefault = true;
         if (!next()) // skip 'default'
-            return 0;
+            return nullptr;
         if (!isOperator(kOperator_colon)) {
             fatal("expected `:' after `default' in case label");
-            return 0;
+            return nullptr;
         }
     } else {
         if (!next()) // skip 'case'
-            return 0;
+            return nullptr;
         statement->condition = parseExpression(kEndConditionColon);
     }
     return statement;
 }
 
-CHECK_RETURN astForStatement *parser::parseForStatement() {
-    astForStatement *statement = GC_NEW(astStatement) astForStatement();
+astForStatement *parser::parseForStatement() {
+    auto *statement = GC_NEW astForStatement();
     if (!next()) // skip 'for'
-        return 0;
+        return nullptr;
     if (!isOperator(kOperator_paranthesis_begin)) {
         fatal("expected `(' after `for'");
-        return 0;
+        return nullptr;
     }
     if (!next()) // skip '('
-        return 0;
+        return nullptr;
     if (!isType(kType_semicolon))
         if (!(statement->init = parseDeclarationOrExpressionStatement(kEndConditionSemicolon)))
-            return 0;
+            return nullptr;
     if (!next()) // skip ';'
-        return 0;
+        return nullptr;
     if (!isType(kType_semicolon))
         if (!(statement->condition = parseExpression(kEndConditionSemicolon)))
-            return 0;
+            return nullptr;
     if (!next()) // skip ';'
-        return 0;
+        return nullptr;
     if (!isOperator(kOperator_paranthesis_end)) {
         if (!(statement->loop = parseExpression(kEndConditionParanthesis)))
-            return 0;
+            return nullptr;
     }
     if (!next()) // skip ')'
-        return 0;
+        return nullptr;
     statement->body = parseStatement();
     return statement;
 }
 
-CHECK_RETURN astContinueStatement *parser::parseContinueStatement() {
-    astContinueStatement *statement = GC_NEW(astStatement) astContinueStatement();
+astContinueStatement *parser::parseContinueStatement() {
+    auto *statement = GC_NEW astContinueStatement();
     if (!next()) // skip 'continue'
-        return 0;
+        return nullptr;
     return statement;
 }
 
-CHECK_RETURN astBreakStatement *parser::parseBreakStatement() {
-    astBreakStatement *statement = GC_NEW(astStatement) astBreakStatement();
+astBreakStatement *parser::parseBreakStatement() {
+    auto *statement = GC_NEW astBreakStatement();
     if (!next())
-        return 0; // skip 'break'
+        return nullptr; // skip 'break'
     if (!isType(kType_semicolon)) {
         fatal("expected semicolon after break statement");
-        return 0;
+        return nullptr;
     }
     return statement;
 }
 
-CHECK_RETURN astDiscardStatement *parser::parseDiscardStatement() {
-    astDiscardStatement *statement = GC_NEW(astStatement) astDiscardStatement();
+astDiscardStatement *parser::parseDiscardStatement() {
+    auto *statement = GC_NEW astDiscardStatement();
     if (!next()) // skip 'discard'
-        return 0;
+        return nullptr;
     if (!isType(kType_semicolon)) {
         fatal("expected semicolon after discard statement");
-        return 0;
+        return nullptr;
     }
     return statement;
 }
 
-CHECK_RETURN astReturnStatement *parser::parseReturnStatement() {
-    astReturnStatement *statement = GC_NEW(astStatement) astReturnStatement();
+astReturnStatement *parser::parseReturnStatement() {
+    auto *statement = GC_NEW astReturnStatement();
     if (!next()) // skip 'return'
-        return 0;
+        return nullptr;
     if (!isType(kType_semicolon)) {
         if (!(statement->expression = parseExpression(kEndConditionSemicolon)))
-            return 0;
+            return nullptr;
         if (!isType(kType_semicolon)) {
             fatal("expected semicolon after return statement");
-            return 0;
+            return nullptr;
         }
     }
     return statement;
 }
 
-CHECK_RETURN astDoStatement *parser::parseDoStatement() {
-    astDoStatement *statement = GC_NEW(astStatement) astDoStatement();
+astDoStatement *parser::parseDoStatement() {
+    auto *statement = GC_NEW astDoStatement();
     if (!next()) // skip 'do'
-        return 0;
+        return nullptr;
     if (!(statement->body = parseStatement()))
-        return 0;
+        return nullptr;
     if (!next())
-        return 0;
+        return nullptr;
     if (!isKeyword(kKeyword_while)) {
         fatal("expected `while' after `do'");
-        return 0;
+        return nullptr;
     }
     if (!next()) // skip 'while'
-        return 0;
+        return nullptr;
     if (!isOperator(kOperator_paranthesis_begin)) {
         fatal("expected `(' after `while'");
-        return 0;
+        return nullptr;
     }
     if (!next()) // skip '('
-        return 0;
+        return nullptr;
     if (!(statement->condition = parseExpression(kEndConditionParanthesis)))
-        return 0;
+        return nullptr;
     if (!next())
-        return 0;
+        return nullptr;
     return statement;
 }
 
-CHECK_RETURN astWhileStatement *parser::parseWhileStatement() {
-    astWhileStatement *statement = GC_NEW(astStatement) astWhileStatement();
+astWhileStatement *parser::parseWhileStatement() {
+    auto *statement = GC_NEW astWhileStatement();
     if (!next()) // skip 'while'
-        return 0;
+        return nullptr;
     if (!isOperator(kOperator_paranthesis_begin)) {
         fatal("expected `(' after `while'");
-        return 0;
+        return nullptr;
     }
     if (!next()) // skip '('
-        return 0;
+        return nullptr;
     if (!(statement->condition = parseDeclarationOrExpressionStatement(kEndConditionParanthesis)))
-        return 0;
+        return nullptr;
     if (!next())
-        return 0;
+        return nullptr;
     if (!(statement->body = parseStatement()))
-        return 0;
+        return nullptr;
     return statement;
 }
 
-CHECK_RETURN astDeclarationStatement *parser::parseDeclarationStatement(endCondition condition, bool allow_undefined) {
+astDeclarationStatement *parser::parseDeclarationStatement(endCondition condition, bool allow_undefined) {
     m_lexer.backup();
 
     bool isConst = false;
     if (isKeyword(kKeyword_const)) {
         isConst = true;
         if (!next()) // skip 'const'
-            return 0;
+            return nullptr;
     }
 
-    astType *type = 0;
+    astType *type = nullptr;
     if (isBuiltin()) {
         type = parseBuiltin();
     } else if (isType(kType_identifier)) {
@@ -1577,54 +1578,54 @@ CHECK_RETURN astDeclarationStatement *parser::parseDeclarationStatement(endCondi
 
     if (!type) {
         m_lexer.restore();
-        return 0;
+        return nullptr;
     }
 
     if (!next())
-        return 0;
+        return nullptr;
 
-    astDeclarationStatement *statement = GC_NEW(astStatement) astDeclarationStatement();
+    auto *statement = GC_NEW astDeclarationStatement();
     for (;;) {
         size_t paranthesisCount = 0;
         while (isOperator(kOperator_paranthesis_begin)) {
             paranthesisCount++;
             if (!next()) // skip ','
-                return 0;
+                return nullptr;
         }
         if (!isType(kType_identifier)) {
             m_lexer.restore();
-            return 0;
+            return nullptr;
         }
 
         const char *name = strnew(m_token.asIdentifier);
         if (!next()) // skip identifier
-            return 0;
+            return nullptr;
 
         for (size_t i = 0; i < paranthesisCount; i++) {
             if (!isOperator(kOperator_paranthesis_end)) {
                 m_lexer.restore();
-                return 0;
+                return nullptr;
             }
             if (!next())
-                return 0;
+                return nullptr;
         }
 
         if (statement->variables.empty() && !isOperator(kOperator_assign)
             && !isOperator(kOperator_comma) && !isEndCondition(condition))
         {
             m_lexer.restore();
-            return 0;
+            return nullptr;
         }
 
         astExpression *initialValue = 0;
         if (isOperator(kOperator_assign)) {
             if (!next()) // skip '='
-                return 0;
+                return nullptr;
             if (!(initialValue = parseExpression(kEndConditionComma | condition, allow_undefined)))
-                return 0;
+                return nullptr;
         }
 
-        astFunctionVariable *variable = GC_NEW(astVariable) astFunctionVariable();
+        auto *variable = GC_NEW astFunctionVariable();
         variable->isConst = isConst;
         variable->baseType = type;
         variable->name = strnew(name);
@@ -1636,27 +1637,27 @@ CHECK_RETURN astDeclarationStatement *parser::parseDeclarationStatement(endCondi
             break;
         } else if (isOperator(kOperator_comma)) {
             if (!next()) // skip ','
-                return 0;
+                return nullptr;
         } else if (isOperator(kOperator_bracket_begin)) {
             while (isOperator(kOperator_bracket_begin)) {
                 variable->isArray = true;
                 astConstantExpression *arraySize = parseArraySize();
                 if (!arraySize)
-                    return 0;
+                    return nullptr;
                 variable->arraySizes.push_back(arraySize);
                 if (!next()) // skip ']'
-                    return 0;
+                    return nullptr;
             }
         } else {
             fatal("syntax error during declaration statement");
-            return 0;
+            return nullptr;
         }
     }
 
     return statement;
 }
 
-CHECK_RETURN astSimpleStatement *parser::parseDeclarationOrExpressionStatement(endCondition condition, bool allow_undefined) {
+astSimpleStatement *parser::parseDeclarationOrExpressionStatement(endCondition condition, bool allow_undefined) {
     astSimpleStatement *declaration = parseDeclarationStatement(condition, allow_undefined);
     if (declaration) {
         return declaration;
@@ -1665,9 +1666,9 @@ CHECK_RETURN astSimpleStatement *parser::parseDeclarationOrExpressionStatement(e
     }
 }
 
-CHECK_RETURN astDefineStatement* parser::parseDefineDirective() {
+astDefineStatement* parser::parseDefineDirective() {
     if (m_token.asDirective.type == directive::kDefine) {
-        astDefineStatement* define = GC_NEW(astDefineStatement) astDefineStatement();
+        auto* define = GC_NEW astDefineStatement();
         define->name = strnew(m_token.asDirective.asDefine.name);
 
         // add the define to the scope
@@ -1681,34 +1682,34 @@ CHECK_RETURN astDefineStatement* parser::parseDefineDirective() {
 
         if (!IS_TYPE(token, kType_whitespace)) {
             if (!next()) // skip '('
-                return 0;
+                return nullptr;
             while (!isOperator(kOperator_paranthesis_end)) {
                 if (isType(kType_identifier)) {
                     define->parameters.push_back(strnew (m_token.asIdentifier));
                 }
                 if (!next())
-                    return 0;
+                    return nullptr;
             }
         }
 
         if (!next(false)) {
-            return 0;
+            return nullptr;
         }
 
         define->value = parseExpression(kEndConditionLineFeed, true);
 
         if (!define->value) {
-            return 0;
+            return nullptr;
         }
 
         return define;
     } else {
         fatal("expected a define directive");
-        return 0;
+        return nullptr;
     }
 }
 
-CHECK_RETURN bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* out, bool is_in_root) {
+bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* out, bool is_in_root) {
     if (!next(false)) {
         return false;
     }
@@ -1736,23 +1737,23 @@ CHECK_RETURN bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* ou
                 if (m_token.asDirective.type == directive::kVersion) {
                     if (m_ast->versionDirective) {
                         fatal("Multiple version directives not allowed");
-                        return 0;
+                        return false;
                     }
-                    astVersionDirective *directive = GC_NEW(astVersionDirective) astVersionDirective();
+                    auto *directive = GC_NEW astVersionDirective();
                     directive->version = m_token.asDirective.asVersion.version;
                     directive->type = m_token.asDirective.asVersion.type;
                     m_ast->versionDirective = directive;
                     m_ast->nodes.push_back(directive);
                     continue;
                 } else if (m_token.asDirective.type == directive::kExtension) {
-                    astExtensionDirective *extension = GC_NEW(astExtensionDirective) astExtensionDirective();
+                    auto *extension = GC_NEW astExtensionDirective();
                     extension->behavior = m_token.asDirective.asExtension.behavior;
                     extension->name = strnew(m_token.asDirective.asExtension.name);
                     m_ast->extensionDirectives.push_back(extension);
                     m_ast->nodes.push_back(extension);
                     continue;
                 } else if (m_token.asDirective.type == directive::kInclude) {
-                    astIncludeStatement* include = GC_NEW(astIncludeStatement) astIncludeStatement();
+                    auto* include = GC_NEW astIncludeStatement();
                     include->name = strnew(m_token.asDirective.asInclude.file);
                     m_ast->statements.push_back(include);
                     m_ast->nodes.push_back(include);
@@ -1761,7 +1762,7 @@ CHECK_RETURN bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* ou
                     astDefineStatement* define = parseDefineDirective();
 
                     if (!define) {
-                        return 0;
+                        return false;
                     }
 
                     m_ast->statements.push_back(define);
@@ -1771,7 +1772,7 @@ CHECK_RETURN bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* ou
                     astIfDefDirectiveStatement *ifdef = parseIfDefDirective();
 
                     if (!ifdef) {
-                        return 0;
+                        return false;
                     }
 
                     m_ast->statements.push_back(ifdef);
@@ -1781,7 +1782,7 @@ CHECK_RETURN bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* ou
                     astIfNDefDirectiveStatement *ifndef = parseIfNDefDirective();
 
                     if (!ifndef) {
-                        return 0;
+                        return false;
                     }
 
                     m_ast->statements.push_back(ifndef);
@@ -1791,7 +1792,7 @@ CHECK_RETURN bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* ou
                     astIfDirectiveStatement *ifdef = parseIfDirective();
 
                     if (!ifdef) {
-                        return 0;
+                        return false;
                     }
 
                     m_ast->statements.push_back(ifdef);
@@ -1799,7 +1800,7 @@ CHECK_RETURN bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* ou
                     continue;
                 } else {
                     fatal("unexpected directive %d", m_token.asDirective.type);
-                    return 0;
+                    return false;
                 }
             }
 
@@ -1810,9 +1811,8 @@ CHECK_RETURN bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* ou
         }
 
         if (isType(kType_semicolon)) {
-            for (size_t i = 0; i < items.size(); i++) {
-                topLevel &parse = items[i];
-                astGlobalVariable *global = GC_NEW(astVariable) astGlobalVariable();
+            for (auto & parse : items) {
+                auto *global = GC_NEW astGlobalVariable();
                 global->storage = parse.storage;
                 global->auxiliary = parse.auxiliary;
                 global->memory = parse.memory;
@@ -1850,14 +1850,14 @@ CHECK_RETURN bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* ou
     }
 
     while (m_token.asDirective.type == directive::kElse || m_token.asDirective.type == directive::kElIf) {
-        astStatement* statement = parseStatement();
+        astStatement* conditionStatement = parseStatement();
 
-        if (!statement) {
+        if (!conditionStatement) {
             fatal("cannot parse directive as statement");
             return false;
         }
 
-        out->elseNodes.push_back(statement);
+        out->elseNodes.push_back(conditionStatement);
 
         if (!next()) {
             return false;
@@ -1880,23 +1880,23 @@ CHECK_RETURN bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* ou
                     if (m_token.asDirective.type == directive::kVersion) {
                         if (m_ast->versionDirective) {
                             fatal("Multiple version directives not allowed");
-                            return 0;
+                            return false;
                         }
-                        astVersionDirective *directive = GC_NEW(astVersionDirective) astVersionDirective();
+                        auto *directive = GC_NEW astVersionDirective();
                         directive->version = m_token.asDirective.asVersion.version;
                         directive->type = m_token.asDirective.asVersion.type;
                         m_ast->versionDirective = directive;
                         m_ast->nodes.push_back(directive);
                         continue;
                     } else if (m_token.asDirective.type == directive::kExtension) {
-                        astExtensionDirective *extension = GC_NEW(astExtensionDirective) astExtensionDirective();
+                        auto *extension = GC_NEW astExtensionDirective();
                         extension->behavior = m_token.asDirective.asExtension.behavior;
                         extension->name = strnew(m_token.asDirective.asExtension.name);
                         m_ast->extensionDirectives.push_back(extension);
                         m_ast->nodes.push_back(extension);
                         continue;
                     } else if (m_token.asDirective.type == directive::kInclude) {
-                        astIncludeStatement* include = GC_NEW(astIncludeStatement) astIncludeStatement();
+                        auto* include = GC_NEW astIncludeStatement();
                         include->name = strnew(m_token.asDirective.asInclude.file);
                         m_ast->statements.push_back(include);
                         m_ast->nodes.push_back(include);
@@ -1905,7 +1905,7 @@ CHECK_RETURN bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* ou
                         astDefineStatement* define = parseDefineDirective();
 
                         if (!define) {
-                            return 0;
+                            return false;
                         }
 
                         m_ast->statements.push_back(define);
@@ -1915,7 +1915,7 @@ CHECK_RETURN bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* ou
                         astIfDefDirectiveStatement *ifdef = parseIfDefDirective();
 
                         if (!ifdef) {
-                            return 0;
+                            return false;
                         }
 
                         m_ast->statements.push_back(ifdef);
@@ -1925,7 +1925,7 @@ CHECK_RETURN bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* ou
                         astIfNDefDirectiveStatement *ifndef = parseIfNDefDirective();
 
                         if (!ifndef) {
-                            return 0;
+                            return false;
                         }
 
                         m_ast->statements.push_back(ifndef);
@@ -1935,7 +1935,7 @@ CHECK_RETURN bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* ou
                         astIfDirectiveStatement *ifdef = parseIfDirective();
 
                         if (!ifdef) {
-                            return 0;
+                            return false;
                         }
 
                         m_ast->statements.push_back(ifdef);
@@ -1943,7 +1943,7 @@ CHECK_RETURN bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* ou
                         continue;
                     } else {
                         fatal("unexpected directive %d", m_token.asDirective.type);
-                        return 0;
+                        return false;
                     }
                 }
                 // top level parsing might fail here and it's okay?
@@ -1953,9 +1953,8 @@ CHECK_RETURN bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* ou
             }
 
             if (isType(kType_semicolon)) {
-                for (size_t i = 0; i < items.size(); i++) {
-                    topLevel &parse = items[i];
-                    astGlobalVariable *global = GC_NEW(astVariable) astGlobalVariable();
+                for (auto & parse : items) {
+                    auto *global = GC_NEW astGlobalVariable();
                     global->storage = parse.storage;
                     global->auxiliary = parse.auxiliary;
                     global->memory = parse.memory;
@@ -2003,62 +2002,62 @@ CHECK_RETURN bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* ou
     }
 
     // always add it on the else nodes as this simplifies parsing things
-    out->elseNodes.push_back(GC_NEW(astStatement) astEndIfDirectiveStatement());
+    out->elseNodes.push_back(GC_NEW astEndIfDirectiveStatement());
 
     return true;
 }
 
-CHECK_RETURN astIfDirectiveStatement* parser::parseIfDirective(bool is_in_root) {
+astIfDirectiveStatement* parser::parseIfDirective(bool is_in_root) {
     if (m_token.asDirective.type == directive::kIf) {
-        astIfDirectiveStatement* ifdef = GC_NEW(astIfDirectiveStatement) astIfDirectiveStatement();
+        auto* ifdef = GC_NEW astIfDirectiveStatement();
 
         if (!parseIfDirectiveVariations(ifdef, is_in_root)) {
-            return 0;
+            return nullptr;
         }
 
         return ifdef;
     } else {
         fatal("expected a if directive");
-        return 0;
+        return nullptr;
     }
 }
 
-CHECK_RETURN astIfDefDirectiveStatement* parser::parseIfDefDirective(bool is_in_root) {
+astIfDefDirectiveStatement* parser::parseIfDefDirective(bool is_in_root) {
     if (m_token.asDirective.type == directive::kIfDef) {
-        astIfDefDirectiveStatement* ifdef = GC_NEW(astIfDefDirectiveStatement) astIfDefDirectiveStatement();
+        auto* ifdef = GC_NEW astIfDefDirectiveStatement();
 
         if (!parseIfDirectiveVariations(ifdef, is_in_root)) {
-            return 0;
+            return nullptr;
         }
 
         return ifdef;
     } else {
         fatal("expected a ifdef directive");
-        return 0;
+        return nullptr;
     }
 }
 
-CHECK_RETURN astIfNDefDirectiveStatement* parser::parseIfNDefDirective(bool is_in_root) {
+astIfNDefDirectiveStatement* parser::parseIfNDefDirective(bool is_in_root) {
     if (m_token.asDirective.type == directive::kIfNDef) {
-        astIfNDefDirectiveStatement* ifdef = GC_NEW(astIfNDefDirectiveStatement) astIfNDefDirectiveStatement();
+        auto* ifdef = GC_NEW astIfNDefDirectiveStatement();
 
         if (!parseIfDirectiveVariations(ifdef, is_in_root)) {
-            return 0;
+            return nullptr;
         }
 
         return ifdef;
     } else {
         fatal("expected a ifdef directive");
-        return 0;
+        return nullptr;
     }
 }
 
-CHECK_RETURN astStatement* parser::parseDirective() {
+astStatement* parser::parseDirective() {
     if (m_token.asDirective.type == directive::kVersion) {
         fatal("version directive is only possible at the top level");
-        return 0;
+        return nullptr;
     } else if (m_token.asDirective.type == directive::kInclude) {
-        astIncludeStatement *include = GC_NEW(astStatement) astIncludeStatement();
+        auto *include = GC_NEW astIncludeStatement();
         include->name = strnew(m_token.asDirective.asInclude.file);
         return include;
     } else if (m_token.asDirective.type == directive::kDefine) {
@@ -2071,27 +2070,27 @@ CHECK_RETURN astStatement* parser::parseDirective() {
         return parseIfNDefDirective(false);
     } else if (m_token.asDirective.type == directive::kEndIf) {
         if (!next())
-            return 0;
+            return nullptr;
 
-        return GC_NEW(astStatement) astEndIfDirectiveStatement();
+        return GC_NEW astEndIfDirectiveStatement();
     } else if (m_token.asDirective.type == directive::kElse) {
-        return GC_NEW(astStatement) astElseDirectiveStatement();
+        return GC_NEW astElseDirectiveStatement();
     } else if (m_token.asDirective.type == directive::kElIf) {
-        astElseDirectiveStatement* elif = GC_NEW(astElseDirectiveStatement) astElseDirectiveStatement();
+        auto* elif = GC_NEW astElseDirectiveStatement();
 
         if (!next())
-            return 0;
+            return nullptr;
 
         elif->value = parseExpression(kEndConditionLineFeed, true);
 
         return elif;
     } else {
         fatal("rest of directives not implemented yet!");
-        return 0;
+        return nullptr;
     }
 }
 
-CHECK_RETURN astStatement *parser::parseStatement(bool allow_undefined) {
+astStatement *parser::parseStatement(bool allow_undefined) {
     if (isType(kType_scope_begin)) {
         return parseCompoundStatement();
     } else if (isKeyword(kKeyword_if)) {
@@ -2115,7 +2114,7 @@ CHECK_RETURN astStatement *parser::parseStatement(bool allow_undefined) {
     } else if (isKeyword(kKeyword_return)) {
         return parseReturnStatement();
     } else if (isType(kType_semicolon)) {
-        return GC_NEW(astStatement) astEmptyStatement();
+        return GC_NEW astEmptyStatement();
     } else if (isType(kType_directive)) {
         return parseDirective();
     } else {
@@ -2123,15 +2122,15 @@ CHECK_RETURN astStatement *parser::parseStatement(bool allow_undefined) {
     }
 }
 
-CHECK_RETURN astFunction *parser::parseFunction(const topLevel &parse) {
-    astFunction *function = GC_NEW(astFunction) astFunction();
+astFunction *parser::parseFunction(const topLevel &parse) {
+    auto *function = GC_NEW astFunction();
     function->returnType = parse.type;
     function->name = strnew(parse.name);
 
     if (!next()) // skip '('
-        return 0;
+        return nullptr;
     while (!isOperator(kOperator_paranthesis_end)) {
-        astFunctionParameter *parameter = GC_NEW(astVariable) astFunctionParameter();
+        auto *parameter = GC_NEW astFunctionParameter();
         while (!isOperator(kOperator_comma) && !isOperator(kOperator_paranthesis_end)) {
             if (isKeyword(kKeyword_in)) {
                 parameter->storage = kIn;
@@ -2163,40 +2162,40 @@ CHECK_RETURN astFunction *parser::parseFunction(const topLevel &parse) {
                     parameter->isArray = true;
                     astConstantExpression *arraySize = parseArraySize();
                     if (!arraySize)
-                        return 0;
+                        return nullptr;
                     parameter->arraySizes.push_back(arraySize);
                 }
             } else {
                 parameter->baseType = parseBuiltin();
                 if (parameter->baseType && parameter->baseType->typeType == astType::kBuiltin) {
-                    astBuiltin *builtin = (astBuiltin*)parameter->baseType;
+                    auto *builtin = (astBuiltin*)parameter->baseType;
                     if (builtin->type == kKeyword_void && !strnil(parameter->name)) {
                         fatal("`void' parameter cannot be named");
-                        return 0;
+                        return nullptr;
                     }
                 }
             }
             if (!next())
-                return 0;
+                return nullptr;
         }
 
         if (!parameter->baseType) {
             fatal("expected type");
-            return 0;
+            return nullptr;
         }
         function->parameters.push_back(parameter);
         if (isOperator(kOperator_comma)) {
             if (!next())// skip ','
-                return 0;
+                return nullptr;
         }
     }
     if (!next()) // skip ')'
-        return 0;
+        return nullptr;
 
     // If there is just one 'void' than silently drop it
     if (function->parameters.size() == 1) {
         if (function->parameters[0]->baseType->typeType == astType::kBuiltin) {
-            astBuiltin *builtin = (astBuiltin*)function->parameters[0]->baseType;
+            auto *builtin = (astBuiltin*)function->parameters[0]->baseType;
             if (builtin->type == kKeyword_void)
                 function->parameters.pop_back();
         }
@@ -2207,30 +2206,30 @@ CHECK_RETURN astFunction *parser::parseFunction(const topLevel &parse) {
     if (!strcmp(function->name, "main")) {
         if (!function->parameters.empty()) {
             fatal("`main' cannot have parameters");
-            return 0;
+            return nullptr;
         }
-        if (!function->returnType->typeType == astType::kBuiltin || ((astBuiltin*)function->returnType)->type != kKeyword_void) {
+        if (function->returnType->typeType != astType::kBuiltin || ((astBuiltin*)function->returnType)->type != kKeyword_void) {
             fatal("`main' must be declared to return void");
-            return 0;
+            return nullptr;
         }
     }
 
     if (isType(kType_scope_begin)) {
         function->isPrototype = false;
         if (!next()) // skip '{'
-            return 0;
+            return nullptr;
 
         m_scopes.push_back(scope());
         m_defines.push_back(defineScope());
-        for (size_t i = 0; i < function->parameters.size(); i++)
-            m_scopes.back().push_back(function->parameters[i]);
+        for (auto & parameter : function->parameters)
+            m_scopes.back().push_back(parameter);
         while (!isType(kType_scope_end)) {
             astStatement *statement = parseStatement();
             if (!statement)
-                return 0;
+                return nullptr;
             function->statements.push_back(statement);
             if (!next())// skip ';'
-                return 0;
+                return nullptr;
         }
 
         m_scopes.pop_back();
@@ -2239,7 +2238,7 @@ CHECK_RETURN astFunction *parser::parseFunction(const topLevel &parse) {
         function->isPrototype = true;
     } else {
         fatal("expected `{' or `;'");
-        return 0;
+        return nullptr;
     }
     return function;
 }
@@ -2250,76 +2249,77 @@ CHECK_RETURN astFunction *parser::parseFunction(const topLevel &parse) {
 astBuiltin *parser::parseBuiltin() {
     if (!isType(kType_keyword)) {
         fatal("expected keyword");
-        return 0;
+        return nullptr;
     }
 
     switch (m_token.asKeyword) {
-    #include "lexemes.h"
-        for (size_t i = 0; i < m_builtins.size(); i++) {
-            if (m_builtins[i]->type == m_token.asKeyword) {
-                return m_builtins[i];
+        #include "lexemes.h"
+            for (auto & m_builtin : m_builtins) {
+                if (m_builtin->type == m_token.asKeyword) {
+                    return m_builtin;
+                }
             }
-        }
-        m_builtins.push_back(GC_NEW(astType) astBuiltin(m_token.asKeyword));
-        return m_builtins.back();
-        break;
-    default:
-        break;
+            m_builtins.push_back(GC_NEW astBuiltin(m_token.asKeyword));
+            return m_builtins.back();
+            break;
+        default:
+            break;
     }
+    
     fatal("internal compiler error: attempted to parse as builtin type");
-    return 0;
+    return nullptr;
 }
 #undef TYPENAME
 
-CHECK_RETURN astConstructorCall *parser::parseConstructorCall(bool allow_undefined) {
-    astConstructorCall *expression = GC_NEW(astExpression) astConstructorCall();
+astConstructorCall *parser::parseConstructorCall(bool allow_undefined) {
+    auto *expression = GC_NEW astConstructorCall();
     if (!(expression->type = parseBuiltin()))
-        return 0;
+        return nullptr;
     if (!next())
-        return 0;
+        return nullptr;
     if (!isOperator(kOperator_paranthesis_begin)) {
         fatal("expected `(' for constructor call");
-        return 0;
+        return nullptr;
     }
     if (!next()) // skip '('
-        return 0;
+        return nullptr;
     while (!isOperator(kOperator_paranthesis_end)) {
         astExpression *parameter = parseExpression(kEndConditionComma | kEndConditionParanthesis, allow_undefined);
         if (!parameter)
-            return 0;
+            return nullptr;
         expression->parameters.push_back(parameter);
         if (isOperator(kOperator_comma)) {
             if (!next()) // skip ','
-                return 0;
+                return nullptr;
         }
     }
     return expression;
 }
 
-CHECK_RETURN astFunctionCall *parser::parseFunctionCall(bool allow_undefined) {
-    astFunctionCall *expression = GC_NEW(astExpression) astFunctionCall();
+astFunctionCall *parser::parseFunctionCall(bool allow_undefined) {
+    auto *expression = GC_NEW astFunctionCall();
     expression->name = strnew(m_token.asIdentifier);
     if (!next()) // skip identifier
-        return 0;
+        return nullptr;
     if (!isOperator(kOperator_paranthesis_begin)) {
         fatal("expected `(' for function call");
-        return 0;
+        return nullptr;
     }
-    if (!next()) return 0; // skip '('
+    if (!next()) return nullptr; // skip '('
     while (!isOperator(kOperator_paranthesis_end)) {
         astExpression *parameter = parseExpression(kEndConditionComma | kEndConditionParanthesis, allow_undefined);
         if (!parameter)
-            return 0;
+            return nullptr;
         expression->parameters.push_back(parameter);
         if (isOperator(kOperator_comma)) {
             if (!next()) // skip ','
-                return 0;
+                return nullptr;
         }
     }
     return expression;
 }
 
-CHECK_RETURN bool parser::next(bool ignore_eol, bool ignore_whitespace, bool eof_valid) {
+bool parser::next(bool ignore_eol, bool ignore_whitespace, bool eof_valid) {
     m_lexer.read(m_token, true, ignore_eol, ignore_whitespace);
     if (!eof_valid && isType(kType_eof)) {
         fatal("premature end of file");
@@ -2335,77 +2335,77 @@ CHECK_RETURN bool parser::next(bool ignore_eol, bool ignore_whitespace, bool eof
 astBinaryExpression *parser::createExpression() {
     if (!isType(kType_operator)) {
         fatal("internal compiler error: attempted to create binary expression in wrong context");
-        return 0;
+        return nullptr;
     }
 
     switch (m_token.asOperator) {
-    case kOperator_multiply:
-    case kOperator_divide:
-    case kOperator_modulus:
-    case kOperator_plus:
-    case kOperator_minus:
-    case kOperator_shift_left:
-    case kOperator_shift_right:
-    case kOperator_less:
-    case kOperator_greater:
-    case kOperator_less_equal:
-    case kOperator_greater_equal:
-    case kOperator_equal:
-    case kOperator_not_equal:
-    case kOperator_bit_and:
-    case kOperator_bit_xor:
-    case kOperator_logical_and:
-    case kOperator_logical_xor:
-    case kOperator_logical_or:
-        return GC_NEW(astExpression) astOperationExpression(m_token.asOperator);
-    case kOperator_assign:
-    case kOperator_add_assign:
-    case kOperator_sub_assign:
-    case kOperator_multiply_assign:
-    case kOperator_divide_assign:
-    case kOperator_modulus_assign:
-    case kOperator_shift_left_assign:
-    case kOperator_shift_right_assign:
-    case kOperator_bit_and_assign:
-    case kOperator_bit_xor_assign:
-    case kOperator_bit_or_assign:
-        return GC_NEW(astExpression) astAssignmentExpression(m_token.asOperator);
-    case kOperator_comma:
-        return GC_NEW(astExpression) astSequenceExpression();
-    default:
-        return 0;
+        case kOperator_multiply:
+        case kOperator_divide:
+        case kOperator_modulus:
+        case kOperator_plus:
+        case kOperator_minus:
+        case kOperator_shift_left:
+        case kOperator_shift_right:
+        case kOperator_less:
+        case kOperator_greater:
+        case kOperator_less_equal:
+        case kOperator_greater_equal:
+        case kOperator_equal:
+        case kOperator_not_equal:
+        case kOperator_bit_and:
+        case kOperator_bit_xor:
+        case kOperator_logical_and:
+        case kOperator_logical_xor:
+        case kOperator_logical_or:
+            return GC_NEW astOperationExpression(m_token.asOperator);
+        case kOperator_assign:
+        case kOperator_add_assign:
+        case kOperator_sub_assign:
+        case kOperator_multiply_assign:
+        case kOperator_divide_assign:
+        case kOperator_modulus_assign:
+        case kOperator_shift_left_assign:
+        case kOperator_shift_right_assign:
+        case kOperator_bit_and_assign:
+        case kOperator_bit_xor_assign:
+        case kOperator_bit_or_assign:
+            return GC_NEW astAssignmentExpression(m_token.asOperator);
+        case kOperator_comma:
+            return GC_NEW astSequenceExpression();
+        default:
+            return nullptr;
     }
 }
 
 astType *parser::findType(const char *name) {
-    for (size_t i = 0; i < m_ast->structures.size(); i++) {
-        if (strcmp(m_ast->structures[i]->name, name))
+    for (auto & structure : m_ast->structures) {
+        if (strcmp(structure->name, name) != 0)
             continue;
-        return (astType*)m_ast->structures[i];
+        return (astType*)structure;
     }
-    return 0;
+    return nullptr;
 }
 
 astVariable *parser::findVariable(const char *identifier) {
     for (size_t scopeIndex = m_scopes.size(); scopeIndex > 0; scopeIndex--) {
         scope &s = m_scopes[scopeIndex - 1];
-        for (size_t variableIndex = 0; variableIndex < s.size(); variableIndex++) {
-            if (!strcmp(s[variableIndex]->name, identifier))
-                return s[variableIndex];
+        for (auto & variableIndex : s) {
+            if (!strcmp(variableIndex->name, identifier))
+                return variableIndex;
         }
     }
-    return 0;
+    return nullptr;
 }
 
 astDefineStatement *parser::findDefine(const char* identifier) {
     for (size_t scopeIndex = m_defines.size(); scopeIndex > 0; scopeIndex--) {
         vector<astDefineStatement*> &s = m_defines[scopeIndex - 1];
-        for (size_t variableIndex = 0; variableIndex < s.size(); variableIndex++) {
-            if (!strcmp(s[variableIndex]->name, identifier))
-                return s[variableIndex];
+        for (auto & variableIndex : s) {
+            if (!strcmp(variableIndex->name, identifier))
+                return variableIndex;
         }
     }
-    return 0;
+    return nullptr;
 }
 
 const char *parser::error() const {

@@ -1,6 +1,6 @@
-#include <stdarg.h> // va_list, va_copy, va_start, va_end
-#include <stdlib.h> // malloc
-#include <stdio.h>  // vsnprintf
+#include <cstdarg> // va_list, va_copy, va_start, va_end
+#include <cstdlib> // malloc
+#include <cstdio>  // vsnprintf
 
 namespace glsl {
 

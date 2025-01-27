@@ -1,6 +1,6 @@
-#include <string.h> // memcpy, strlen
-#include <stdlib.h> // malloc, free
-#include <limits.h> // INT_MAX, UINT_MAX
+#include <cstring> // memcpy, strlen
+#include <cstdlib> // malloc, free
+#include <climits> // INT_MAX, UINT_MAX
 
 #include "lexer.h"
 
@@ -75,16 +75,16 @@ static inline bool isSpace(int ch) {
     return (ch >= '\t' && ch <= '\r') || ch == ' ';
 }
 
-lexer::lexer(const char *string)
-    : m_data(string)
+lexer::lexer(const char *data)
+    : m_data(data)
     , m_length(0)
-    , m_error(0)
+    , m_error(nullptr)
 {
     if (m_data)
         m_length = strlen(m_data);
 }
 
-int lexer::at(int offset) const {
+char lexer::at(int offset) const {
     if (position() + offset < m_length)
         return m_data[position() + offset];
     return 0;
@@ -117,8 +117,8 @@ void lexer::read(token &out) {
         return;
     }
 
-    int ch1 = at(1);
-    int ch2 = at(2);
+    char ch1 = at(1);
+    char ch2 = at(2);
 
     // Lex numerics
     if (isDigit(at()) || (at() == '.' && isDigit(ch1)))
@@ -214,7 +214,7 @@ void lexer::read(token &out) {
             }
         } else if (isUnsigned) {
             out.m_type = kType_constant_uint;
-            unsigned long long value = strtoull(&numeric[0], 0, base);
+            unsigned long long value = strtoull(&numeric[0], nullptr, base);
             if (value <= UINT_MAX) {
                 out.asUnsigned = (unsigned int)value;
             } else {
@@ -222,7 +222,7 @@ void lexer::read(token &out) {
             }
         } else {
             out.m_type = kType_constant_int;
-            long long value = strtoll(&numeric[0], 0, base);
+            long long value = strtoll(&numeric[0], nullptr, base);
             if (value <= INT_MAX) {
                 out.asInt = (int)value;
             } else {
@@ -247,10 +247,10 @@ void lexer::read(token &out) {
 
         // Or is it a keyword?
         for (size_t i = 0; i < sizeof(kKeywords)/sizeof(kKeywords[0]); i++) {
-            if (strcmp(kKeywords[i].name, out.asIdentifier))
+            if (strcmp(kKeywords[i].name, out.asIdentifier) != 0)
                 continue;
             free(out.asIdentifier);
-            out.asIdentifier = 0;
+            out.asIdentifier = nullptr;
             out.m_type = kType_keyword;
             out.asKeyword = (keywordTypes) i;
             break;
@@ -284,25 +284,25 @@ void lexer::read(token &out) {
             }
             digits.push_back('\0');
 
-            long long value = strtoll(&digits[0], 0, 10);
+            long long value = strtoll(&digits[0], nullptr, 10);
             out.asDirective.asVersion.version = value;
             out.asDirective.asVersion.type = kCore;
 
             skipWhitespace(false);
 
-            vector<char> chars;
+            vector<char> version;
             while (isChar(at())) {
                 chars.push_back(at());
                 m_location.advanceColumn();
             }
 
-            if (!chars.empty()) {
-                chars.push_back('\0');
-                if (!strcmp(&chars[0], "core")) {
+            if (!version.empty()) {
+                version.push_back('\0');
+                if (!strcmp(&version[0], "core")) {
                     // Do nothing, already core.
-                } else if (!strcmp(&chars[0], "compatibility")) {
+                } else if (!strcmp(&version[0], "compatibility")) {
                     out.asDirective.asVersion.type = kCompatibility;
-                } else if (!strcmp(&chars[0], "es")) {
+                } else if (!strcmp(&version[0], "es")) {
                     out.asDirective.asVersion.type = kES;
                 } else {
                     m_error = "Invalid profile in #version directive";

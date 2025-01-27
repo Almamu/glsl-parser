@@ -1,5 +1,5 @@
-#include <stdio.h>  // fread, fclose, fprintf, stderr
-#include <string.h> // strcmp, memcpy
+#include <cstdio>  // fread, fclose, fprintf, stderr
+#include <cstring> // strcmp, memcpy
 
 #include "parser.h"
 #include "printer.h"
@@ -40,7 +40,7 @@ int main(int argc, char **argv) {
             // Treat as fragment shader by default
             if (shaderType == -1)
                 shaderType = astTU::kFragment;
-            sourceFile source;
+            sourceFile source{};
             if (!strcmp(argv[0], "-")) {
                 source.fileName = "<stdin>";
                 source.file = stdin;
@@ -58,18 +58,18 @@ int main(int argc, char **argv) {
         }
     }
 
-    for (size_t i = 0; i < sources.size(); i++) {
+    for (auto & source : sources) {
         vector<char> contents;
         // Read contents of file
-        if (sources[i].file != stdin) {
-            fseek(sources[i].file, 0, SEEK_END);
-            contents.resize(ftell(sources[i].file));
-            fseek(sources[i].file, 0, SEEK_SET);
-            fread(&contents[0], 1, contents.size(), sources[i].file);
-            fclose(sources[i].file);
+        if (source.file != stdin) {
+            fseek(source.file, 0, SEEK_END);
+            contents.resize(ftell(source.file));
+            fseek(source.file, 0, SEEK_SET);
+            fread(&contents[0], 1, contents.size(), source.file);
+            fclose(source.file);
         } else {
             char buffer[1024];
-            int c;
+            size_t c;
             while ((c = fread(buffer, 1, sizeof(buffer), stdin))) {
                 contents.reserve(contents.size() + c);
                 contents.insert(contents.end(), buffer, buffer + c);
@@ -79,8 +79,8 @@ int main(int argc, char **argv) {
         builtinVariables.push_back("gl_FragColor");
         builtinVariables.push_back("gl_Position");
         contents.push_back('\0');
-        parser p(&contents[0], sources[i].fileName);
-        astTU *tu = p.parse(sources[i].shaderType, &builtinVariables);
+        parser p(&contents[0], source.fileName);
+        astTU *tu = p.parse(source.shaderType, &builtinVariables);
         if (tu) {
             std::string result = printTU(tu);
             printf("%s\n", result.c_str());

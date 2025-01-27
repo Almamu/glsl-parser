@@ -30,7 +30,7 @@ const char *astStatement::name() const {
 
 astTU::astTU(int type)
     : type(type)
-    , versionDirective(0)
+    , versionDirective(nullptr)
 {
 }
 
@@ -47,20 +47,20 @@ astType::astType(enum astTypeType type)
 
 astStruct::astStruct()
     : astType(kStruct)
-    , name(0)
+    , name(nullptr)
 {
 }
 
 astInterfaceBlock::astInterfaceBlock()
     : astType(kInterfaceBlock)
-    , name(0)
+    , name(nullptr)
     , storage(0)
 {
 }
 
 astExtensionDirective::astExtensionDirective()
     : astType(kExtensionDirective)
-    , name(0)
+    , name(nullptr)
     , behavior(-1)
 {
 }
@@ -81,8 +81,8 @@ astBuiltin::astBuiltin(int type)
 astVariable::astVariable(enum astVariableType type)
     : astNode<astVariable>(kVariable)
     , type(type)
-    , name(0)
-    , baseType(0)
+    , name(nullptr)
+    , baseType(nullptr)
     , isArray(false)
     , isPrecise(false)
 {
@@ -91,7 +91,7 @@ astVariable::astVariable(enum astVariableType type)
 astFunctionVariable::astFunctionVariable()
     : astVariable(astVariable::kFunction)
     , isConst(false)
-    , initialValue(0)
+    , initialValue(nullptr)
 {
 }
 
@@ -112,7 +112,7 @@ astGlobalVariable::astGlobalVariable()
     , precision(-1)
     , interpolation(-1)
     , isInvariant(false)
-    , initialValue(0)
+    , initialValue(nullptr)
 {
 }
 
@@ -128,20 +128,20 @@ astCompoundStatement::astCompoundStatement()
 
 astDefineStatement::astDefineStatement()
     : astSimpleStatement (astStatement::kDefine)
-    , name (0)
-    , value (0)
+    , name (nullptr)
+    , value (nullptr)
 {
 }
 
 astElseDirectiveStatement::astElseDirectiveStatement()
     : astSimpleStatement (astStatement::kElseDirective)
-    , value (0)
+    , value (nullptr)
 {
 }
 
 astIncludeStatement::astIncludeStatement()
     : astSimpleStatement (astStatement::kInclude)
-    , name (0)
+    , name (nullptr)
 {
 }
 
@@ -157,7 +157,7 @@ astIfNDefDirectiveStatement::astIfNDefDirectiveStatement()
 
 astIfDirectiveStatement::astIfDirectiveStatement(astStatementType type)
     : astStatement (type)
-    , value (0)
+    , value (nullptr)
 {
 }
 
@@ -178,22 +178,22 @@ astDeclarationStatement::astDeclarationStatement()
 
 astLayoutQualifier::astLayoutQualifier()
     : astNode<astLayoutQualifier>(kLayoutQualifier)
-    , name(0)
-    , initialValue(0)
+    , name(nullptr)
+    , initialValue(nullptr)
 {
 }
 
 astFunction::astFunction()
     : astNode<astFunction>(kFunction)
-    , returnType(0)
-    , name(0)
+    , returnType(nullptr)
+    , name(nullptr)
     , isPrototype(false)
 {
 }
 
 astDeclaration::astDeclaration()
     : astNode<astDeclaration>(kDeclaration)
-    , variable(0)
+    , variable(nullptr)
 {
 }
 
@@ -211,21 +211,21 @@ astExpressionStatement::astExpressionStatement(astExpression *expression)
 
 astIfStatement::astIfStatement()
     : astSimpleStatement(astStatement::kIf)
-    , condition(0)
-    , thenStatement(0)
-    , elseStatement(0)
+    , condition(nullptr)
+    , thenStatement(nullptr)
+    , elseStatement(nullptr)
 {
 }
 
 astSwitchStatement::astSwitchStatement()
     : astSimpleStatement(astStatement::kSwitch)
-    , expression(0)
+    , expression(nullptr)
 {
 }
 
 astCaseLabelStatement::astCaseLabelStatement()
     : astSimpleStatement(astStatement::kCaseLabel)
-    , condition(0)
+    , condition(nullptr)
     , isDefault(false)
 {
 }
@@ -237,24 +237,24 @@ astIterationStatement::astIterationStatement(enum astStatementType type)
 
 astWhileStatement::astWhileStatement()
     : astIterationStatement(astStatement::kWhile)
-    , condition(0)
-    , body(0)
+    , condition(nullptr)
+    , body(nullptr)
 {
 }
 
 astDoStatement::astDoStatement()
     : astIterationStatement(astStatement::kDo)
-    , body(0)
-    , condition(0)
+    , body(nullptr)
+    , condition(nullptr)
 {
 }
 
 astForStatement::astForStatement()
     : astIterationStatement(astStatement::kFor)
-    , init(0)
-    , condition(0)
-    , loop(0)
-    , body(0)
+    , init(nullptr)
+    , condition(nullptr)
+    , loop(nullptr)
+    , body(nullptr)
 {
 }
 
@@ -275,7 +275,7 @@ astBreakStatement::astBreakStatement()
 
 astReturnStatement::astReturnStatement()
     : astJumpStatement(astStatement::kReturn)
-    , expression(0)
+    , expression(nullptr)
 {
 }
 
@@ -332,35 +332,35 @@ astDefineIdentifier::astDefineIdentifier(astDefineStatement *define)
 {
 }
 
-astUnknownIdentifier::astUnknownIdentifier(char* name)
+astUnknownIdentifier::astUnknownIdentifier(char* define)
     : astExpression(astExpression::kUnknownIdentifier)
-    , define(name)
+    , define(define)
 {
 }
 
 astFieldOrSwizzle::astFieldOrSwizzle()
     : astExpression(kFieldOrSwizzle)
-    , operand(0)
-    , name(0)
+    , operand(nullptr)
+    , name(nullptr)
 {
 }
 
 astArraySubscript::astArraySubscript()
     : astExpression(kArraySubscript)
-    , operand(0)
-    , index(0)
+    , operand(nullptr)
+    , index(nullptr)
 {
 }
 
 astFunctionCall::astFunctionCall()
     : astExpression(astExpression::kFunctionCall)
-    , name(0)
+    , name(nullptr)
 {
 }
 
 astConstructorCall::astConstructorCall()
     : astExpression(astExpression::kConstructorCall)
-    , type(0)
+    , type(nullptr)
 {
 }
 
@@ -372,8 +372,8 @@ astUnaryExpression::astUnaryExpression(enum astExpressionType type, astExpressio
 
 astBinaryExpression::astBinaryExpression(enum astExpressionType type)
     : astExpression(type)
-    , operand1(0)
-    , operand2(0)
+    , operand1(nullptr)
+    , operand2(nullptr)
 {
 }
 
@@ -436,9 +436,9 @@ astOperationExpression::astOperationExpression(int operation)
 
 astTernaryExpression::astTernaryExpression()
     : astExpression(astExpression::kTernary)
-    , condition(0)
-    , onTrue(0)
-    , onFalse(0)
+    , condition(nullptr)
+    , onTrue(nullptr)
+    , onFalse(nullptr)
 {
 }
 

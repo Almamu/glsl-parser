@@ -1,5 +1,4 @@
-#ifndef PRINTER_H
-#define PRINTER_H
+#pragma once
 
 #include "parser.h"
 #include <string>
@@ -7,5 +6,3 @@
 namespace glsl {
     std::string printTU(astTU *tu);
 }
-
-#endif

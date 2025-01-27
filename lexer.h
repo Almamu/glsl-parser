@@ -1,5 +1,5 @@
-#ifndef LEXER_HDR
-#define LEXER_HDR
+#pragma once
+
 #include "util.h"
 
 namespace glsl {
@@ -104,7 +104,7 @@ struct directive {
 };
 
 struct token {
-    int precedence() const;
+    [[nodiscard]] int precedence() const;
 
 private:
     token();
@@ -135,25 +135,24 @@ private:
 };
 
 struct lexer {
-    lexer(const char *data);
+    explicit lexer(const char *data);
 
-    token read();
     token peek(bool ignore_eol = true, bool ignore_whitespace = true);
 
-    const char *error() const;
+    [[nodiscard]] const char *error() const;
 
     void backup();
     void restore();
 
-    size_t line() const;
-    size_t column() const;
+    [[nodiscard]] size_t line() const;
+    [[nodiscard]] size_t column() const;
 
 protected:
     friend struct parser;
 
-    size_t position() const;
+    [[nodiscard]] size_t position() const;
 
-    int at(int offset = 0) const;
+    [[nodiscard]] char at(int offset = 0) const;
 
     void read(token &out);
     void read(token &out, bool, bool ignore_eol = true, bool ignore_whitespace = true);
@@ -183,5 +182,3 @@ inline size_t lexer::column() const {
 }
 
 }
-
-#endif
