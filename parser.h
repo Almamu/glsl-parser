@@ -48,7 +48,6 @@ struct parser {
     ~parser();
     parser(const char *source, const char *fileName, parserIncludeResolver* includeResolvers, vector<const char*>* builtinVariables = nullptr);
     [[nodiscard]] astTU *parse(int type);
-    [[nodiscard]] bool parse(astTU* into);
 
     [[nodiscard]] const char *error() const;
 

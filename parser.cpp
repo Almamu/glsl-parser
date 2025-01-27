@@ -310,8 +310,9 @@ bool parser::isBuiltin() const {
 #undef TYPENAME
 #define TYPENAME(...)
 
-bool parser::parse(astTU* into) {
-    m_ast = into;
+/// The parser entry point
+astTU *parser::parse(int type) {
+    m_ast = new astTU(type);
     m_scopes.push_back(scope());
     m_defines.push_back(defineScope());
 
@@ -330,7 +331,7 @@ bool parser::parse(astTU* into) {
 
         if (m_lexer.error()) {
             fatal("%s", m_lexer.error());
-            return false;
+            return nullptr;
         }
 
         if (isType(kType_eof)) {
@@ -341,7 +342,7 @@ bool parser::parse(astTU* into) {
             if (m_token.asDirective.type == directive::kVersion) {
                 if (m_ast->versionDirective) {
                     fatal("Multiple version directives not allowed");
-                    return false;
+                    return nullptr;
                 }
                 auto *directive = GC_NEW astVersionDirective();
                 directive->version = m_token.asDirective.asVersion.version;
@@ -358,14 +359,14 @@ bool parser::parse(astTU* into) {
                 continue;
             } else if (m_token.asDirective.type == directive::kInclude) {
                 if (!parseIncludeDirective()) {
-                    return false;
+                    return nullptr;
                 }
                 continue;
             } else if (m_token.asDirective.type == directive::kDefine) {
                 astDefineStatement* define = parseDefineDirective();
 
                 if (!define) {
-                    return false;
+                    return nullptr;
                 }
 
                 m_ast->statements.push_back(define);
@@ -375,7 +376,7 @@ bool parser::parse(astTU* into) {
                 astIfDefDirectiveStatement *ifdef = parseIfDefDirective();
 
                 if (!ifdef) {
-                    return false;
+                    return nullptr;
                 }
 
                 m_ast->statements.push_back(ifdef);
@@ -385,7 +386,7 @@ bool parser::parse(astTU* into) {
                 astIfNDefDirectiveStatement *ifndef = parseIfNDefDirective();
 
                 if (!ifndef) {
-                    return false;
+                    return nullptr;
                 }
 
                 m_ast->statements.push_back(ifndef);
@@ -395,7 +396,7 @@ bool parser::parse(astTU* into) {
                 astIfDirectiveStatement *ifdef = parseIfDirective();
 
                 if (!ifdef) {
-                    return false;
+                    return nullptr;
                 }
 
                 m_ast->statements.push_back(ifdef);
@@ -403,13 +404,13 @@ bool parser::parse(astTU* into) {
                 continue;
             } else {
                 fatal("unexpected directive %d", m_token.asDirective.type);
-                return false;
+                return nullptr;
             }
         }
 
         vector<topLevel> items;
         if (!parseTopLevel(items, &m_ast->nodes))
-            return false;
+            return nullptr;
 
         if (isType(kType_semicolon)) {
             for (auto & parse : items) {
@@ -426,7 +427,7 @@ bool parser::parse(astTU* into) {
                 global->layoutQualifiers = parse.layoutQualifiers;
                 if (parse.initialValue) {
                     if (!(global->initialValue = evaluate(parse.initialValue)))
-                        return false;
+                        return nullptr;
                 }
                 global->isArray = parse.isArray;
                 global->arraySizes = parse.arraySizes;
@@ -437,28 +438,17 @@ bool parser::parse(astTU* into) {
         } else if (isOperator(kOperator_paranthesis_begin)) {
             astFunction *function = parseFunction(items.front());
             if (!function)
-                return false;
+                return nullptr;
             m_ast->functions.push_back(function);
             m_ast->nodes.push_back(function);
         } else if (isType(kType_whitespace) || isType(kType_end_of_line)) {
             continue; // whitespace tokens will be used later for the preprocessor
         } else {
             fatal("syntax error at top level %d", m_token.asKeyword);
-            return false;
+            return nullptr;
         }
     }
-    return true;
-}
-/// The parser entry point
-astTU *parser::parse(int type) {
-    auto* tu = new astTU(type);
-
-    if (parse(tu)) {
-        return tu;
-    } else {
-        delete tu;
-        return nullptr;
-    }
+    return m_ast;
 }
 
 bool parser::parseStorage(topLevel &current) {
