@@ -20,6 +20,7 @@ Check out the superior diagnostics [here](EXAMPLE_ERRORS.md)
 ### Known limitations
   * Does not support preprocessor directives
     * Does support `#version` and `#extension` though.
+    * Supports #ifdef, #if, #elif, #else and #endif although this implementation might be iffy
   * Does not handle new-line termination with the backslack character `\`
   * Not all of GLSL is supported, if you run into a missing feature open an issue.
   * None of the builtin functions or variables are provided, you must provide those yourself.
@@ -40,3 +41,7 @@ Check out the superior diagnostics [here](EXAMPLE_ERRORS.md)
   * Doesn't use virtual functions
   * Small (~90 KB)
   * Permissive (MIT)
+
+**NOTE**: This version is updated and customized for usage in linux-wallpaperengine and might not be what you're looking
+to use in the long run. Thanks to the original creator [graphitemaster](https://github.com/graphitemaster/glsl-parser)
+for the library that served as base for this.
