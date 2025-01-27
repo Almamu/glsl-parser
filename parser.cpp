@@ -1745,14 +1745,14 @@ bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* out, bool is_in
                     directive->version = m_token.asDirective.asVersion.version;
                     directive->type = m_token.asDirective.asVersion.type;
                     m_ast->versionDirective = directive;
-                    m_ast->nodes.push_back(directive);
+                    out->thenNodes.push_back(directive);
                     continue;
                 } else if (m_token.asDirective.type == directive::kExtension) {
                     auto *extension = GC_NEW astExtensionDirective();
                     extension->behavior = m_token.asDirective.asExtension.behavior;
                     extension->name = strnew(m_token.asDirective.asExtension.name);
                     m_ast->extensionDirectives.push_back(extension);
-                    m_ast->nodes.push_back(extension);
+                    out->thenNodes.push_back(extension);
                     continue;
                 } else if (m_token.asDirective.type == directive::kInclude) {
                     if (!parseIncludeDirective()) {
@@ -1766,8 +1766,7 @@ bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* out, bool is_in
                         return false;
                     }
 
-                    m_ast->statements.push_back(define);
-                    m_ast->nodes.push_back(define);
+                    out->thenNodes.push_back(define);
                     continue;
                 } else if (m_token.asDirective.type == directive::kIfDef) {
                     astIfDefDirectiveStatement *ifdef = parseIfDefDirective();
@@ -1776,8 +1775,7 @@ bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* out, bool is_in
                         return false;
                     }
 
-                    m_ast->statements.push_back(ifdef);
-                    m_ast->nodes.push_back(ifdef);
+                    out->thenNodes.push_back(ifdef);
                     continue;
                 } else if (m_token.asDirective.type == directive::kIfNDef) {
                     astIfNDefDirectiveStatement *ifndef = parseIfNDefDirective();
@@ -1786,8 +1784,7 @@ bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* out, bool is_in
                         return false;
                     }
 
-                    m_ast->statements.push_back(ifndef);
-                    m_ast->nodes.push_back(ifndef);
+                    out->thenNodes.push_back(ifndef);
                     continue;
                 } else if (m_token.asDirective.type == directive::kIf) {
                     astIfDirectiveStatement *ifdef = parseIfDirective();
@@ -1796,8 +1793,7 @@ bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* out, bool is_in
                         return false;
                     }
 
-                    m_ast->statements.push_back(ifdef);
-                    m_ast->nodes.push_back(ifdef);
+                    out->thenNodes.push_back(ifdef);
                     continue;
                 } else {
                     fatal("unexpected directive %d", m_token.asDirective.type);
@@ -1887,14 +1883,14 @@ bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* out, bool is_in
                         directive->version = m_token.asDirective.asVersion.version;
                         directive->type = m_token.asDirective.asVersion.type;
                         m_ast->versionDirective = directive;
-                        m_ast->nodes.push_back(directive);
+                        out->elseNodes.push_back(directive);
                         continue;
                     } else if (m_token.asDirective.type == directive::kExtension) {
                         auto *extension = GC_NEW astExtensionDirective();
                         extension->behavior = m_token.asDirective.asExtension.behavior;
                         extension->name = strnew(m_token.asDirective.asExtension.name);
                         m_ast->extensionDirectives.push_back(extension);
-                        m_ast->nodes.push_back(extension);
+                        out->elseNodes.push_back(extension);
                         continue;
                     } else if (m_token.asDirective.type == directive::kInclude) {
                         if (!parseIncludeDirective()) {
@@ -1908,8 +1904,7 @@ bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* out, bool is_in
                             return false;
                         }
 
-                        m_ast->statements.push_back(define);
-                        m_ast->nodes.push_back(define);
+                        out->elseNodes.push_back(define);
                         continue;
                     } else if (m_token.asDirective.type == directive::kIfDef) {
                         astIfDefDirectiveStatement *ifdef = parseIfDefDirective();
@@ -1918,8 +1913,7 @@ bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* out, bool is_in
                             return false;
                         }
 
-                        m_ast->statements.push_back(ifdef);
-                        m_ast->nodes.push_back(ifdef);
+                        out->elseNodes.push_back(ifdef);
                         continue;
                     } else if (m_token.asDirective.type == directive::kIfNDef) {
                         astIfNDefDirectiveStatement *ifndef = parseIfNDefDirective();
@@ -1928,8 +1922,7 @@ bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* out, bool is_in
                             return false;
                         }
 
-                        m_ast->statements.push_back(ifndef);
-                        m_ast->nodes.push_back(ifndef);
+                        out->elseNodes.push_back(ifndef);
                         continue;
                     } else if (m_token.asDirective.type == directive::kIf) {
                         astIfDirectiveStatement *ifdef = parseIfDirective();
@@ -1938,8 +1931,7 @@ bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* out, bool is_in
                             return false;
                         }
 
-                        m_ast->statements.push_back(ifdef);
-                        m_ast->nodes.push_back(ifdef);
+                        out->elseNodes.push_back(ifdef);
                         continue;
                     } else {
                         fatal("unexpected directive %d", m_token.asDirective.type);
