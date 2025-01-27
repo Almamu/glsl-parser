@@ -2,9 +2,10 @@
 #define PRINTER_H
 
 #include "parser.h"
+#include <string>
 
 namespace glsl {
-    void printTU(astTU *tu);
+    std::string printTU(astTU *tu);
 }
 
 #endif

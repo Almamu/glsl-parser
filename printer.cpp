@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "printer.h"
+#include <string>
 
 namespace glsl {
 
@@ -21,70 +22,86 @@ namespace glsl {
 #undef OPERATOR
 #define OPERATOR(...)
 
-#define print(...) \
-    do { \
-        printf(__VA_ARGS__); \
-    } while (0)
+    std::string buffer;
+
+    static void output(const char* format, ...) {
+        va_list args;
+        va_start(args, format);
+
+        int size = vsnprintf(nullptr, 0, format, args);
+
+        if (size < 0) {
+            va_end(args);
+            return;
+        }
+
+        size_t oldSize = buffer.size();
+        buffer.resize(oldSize + size);
+
+        va_start (args, format); // restart args
+        vsnprintf(&buffer[oldSize], size + 1, format, args);
+        va_end(args);
+    }
 
     static void printExpression(astExpression *expression);
     static void printStatement(astStatement *statement);
     static void printNodes(vector<astBase*> nodes);
 
     static void printBuiltin(astBuiltin *builtin) {
-        print("%s", kTypes[builtin->type]);
+        output("%s", kTypes[builtin->type]);
     }
 
     static void printType(astType *type) {
         if (type->typeType == astType::kBuiltin)
             printBuiltin((astBuiltin*)type);
         else
-            print("%s", ((astStruct*)type)->name);
+            output("%s", ((astStruct *) type)->name);
     }
 
     static void printIntConstant(astIntConstant *expression) {
-        print("%d", expression->value);
+        output("%d", expression->value);
     }
 
     static void printUIntConstant(astUIntConstant *expression) {
-        print("%du", expression->value);
+        output("%du", expression->value);
     }
 
     static void printFloatConstant(astFloatConstant *expression) {
         char format[1024];
         snprintf(format, sizeof format, "%g", expression->value);
         if (!strchr(format, '.'))
-            print("%g.0", expression->value);
+            output("%g.0", expression->value);
         else
-            print("%s", format);
+            output("%s", format);
     }
 
     static void printDoubleConstant(astDoubleConstant *expression) {
-        print("%g", expression->value);
+        output("%g", expression->value);
     }
 
     static void printBoolConstant(astBoolConstant *expression) {
-        print("%s", expression->value ? "true" : "false");
+        output("%s", expression->value ? "true" : "false");
     }
 
     static void printArraySize(const vector<astConstantExpression*> &arraySizes) {
         for (size_t i = 0; i < arraySizes.size(); i++) {
-            print("[");
+            output("[");
             printExpression(arraySizes[i]);
-            print("]");
+            output("]");
         }
     }
 
     static void printVariable(astVariable *variable, bool nameOnly = false) {
         if (variable->isPrecise)
-            print("precise ");
+            output("precise ");
 
         if (nameOnly) {
-            print("%s", variable->name);
+            output("%s", variable->name);
             return;
         }
 
         printType(variable->baseType);
-        print(" %s", variable->name);
+        output(" %s", variable->name);
 
         if (nameOnly)
             return;
@@ -96,28 +113,28 @@ namespace glsl {
     static void printStorage(int storage) {
         switch (storage) {
             case kConst:
-                print("const ");
+                output("const ");
                 break;
             case kIn:
-                print("in ");
+                output("in ");
                 break;
             case kOut:
-                print("out ");
+                output("out ");
                 break;
             case kAttribute:
-                print("attribute ");
+                output("attribute ");
                 break;
             case kUniform:
-                print("uniform ");
+                output("uniform ");
                 break;
             case kVarying:
-                print("varying ");
+                output("varying ");
                 break;
             case kBuffer:
-                print("buffer ");
+                output("buffer ");
                 break;
             case kShared:
-                print("shared ");
+                output("shared ");
                 break;
         }
     }
@@ -125,35 +142,35 @@ namespace glsl {
     static void printAuxiliary(int auxiliary) {
         switch (auxiliary) {
             case kCentroid:
-                print("centroid ");
+                output("centroid ");
                 break;
             case kSample:
-                print("sample ");
+                output("sample ");
                 break;
             case kPatch:
-                print("patch ");
+                output("patch ");
                 break;
         }
     }
 
     static void printMemory(int memory) {
-        if (memory & kCoherent) print("coherent ");
-        if (memory & kVolatile) print("volatile ");
-        if (memory & kRestrict) print("restrict ");
-        if (memory & kReadOnly) print("readonly ");
-        if (memory & kWriteOnly) print("writeonly ");
+        if (memory & kCoherent) output("coherent ");
+        if (memory & kVolatile) output("volatile ");
+        if (memory & kRestrict) output("restrict ");
+        if (memory & kReadOnly) output("readonly ");
+        if (memory & kWriteOnly) output("writeonly ");
     }
 
     static void printPrecision(int precision) {
         switch (precision) {
             case kLowp:
-                printf("lowp ");
+                output("lowp ");
                 break;
             case kMediump:
-                printf("mediump ");
+                output("mediump ");
                 break;
             case kHighp:
-                printf("highp ");
+                output("highp ");
                 break;
         }
     }
@@ -161,18 +178,18 @@ namespace glsl {
     static void printGlobalVariable(astGlobalVariable *variable) {
         vector<astLayoutQualifier*> &qualifiers = variable->layoutQualifiers;
         if (variable->layoutQualifiers.size()) {
-            print("layout (");
+            output("layout (");
             for (size_t i = 0; i < qualifiers.size(); i++) {
                 astLayoutQualifier *qualifier = qualifiers[i];
-                print("%s", qualifier->name);
+                output("%s", qualifier->name);
                 if (qualifier->initialValue) {
-                    print(" = ");
+                    output(" = ");
                     printExpression(qualifier->initialValue);
                 }
                 if (i != qualifiers.size() - 1)
-                    print(", ");
+                    output(", ");
             }
-            print(") ");
+            output(") ");
         }
 
         printStorage(variable->storage);
@@ -181,28 +198,28 @@ namespace glsl {
         printPrecision(variable->precision);
 
         if (variable->isInvariant)
-            print("invariant ");
+            output("invariant ");
 
         switch (variable->interpolation) {
             case kSmooth:
-                print("smooth ");
+                output("smooth ");
                 break;
             case kFlat:
-                print("flat ");
+                output("flat ");
                 break;
             case kNoPerspective:
-                print("noperspective ");
+                output("noperspective ");
                 break;
         }
 
         printVariable((astVariable*)variable);
 
         if (variable->initialValue) {
-            print(" = ");
+            output(" = ");
             printExpression(variable->initialValue);
         }
 
-        print(";\n");
+        output(";\n");
     }
 
     static void printVariableIdentifier(astVariableIdentifier *expression) {
@@ -210,130 +227,130 @@ namespace glsl {
     }
 
     static void printDefineIdentifier(astDefineIdentifier *expression) {
-        printf("%s", expression->define->name);
+        output("%s", expression->define->name);
     }
 
     static void printUnknownIdentifier(astUnknownIdentifier *expression) {
-        printf("%s", expression->define);
+        output("%s", expression->define);
     }
 
     static void printFieldOrSwizzle(astFieldOrSwizzle *expression) {
         printExpression(expression->operand);
-        print(".%s", expression->name);
+        output(".%s", expression->name);
     }
 
     static void printArraySubscript(astArraySubscript *expression) {
         printExpression(expression->operand);
-        print("[");
+        output("[");
         printExpression(expression->index);
-        print("]");
+        output("]");
     }
 
     static void printFunctionCall(astFunctionCall *expression) {
-        print("%s(", expression->name);
+        output("%s(", expression->name);
         for (size_t i = 0; i < expression->parameters.size(); i++) {
             printExpression(expression->parameters[i]);
             if (i != expression->parameters.size() - 1)
-                print(", ");
+                output(", ");
         }
-        print(")");
+        output(")");
     }
 
     static void printConstructorCall(astConstructorCall *expression) {
         printType(expression->type);
-        print("(");
+        output("(");
         for (size_t i = 0; i < expression->parameters.size(); i++) {
             printExpression(expression->parameters[i]);
             if (i != expression->parameters.size() - 1)
-                print(", ");
+                output(", ");
         }
-        print(")");
+        output(")");
     }
 
     enum { kSemicolon = 1 << 0, kNewLine = 1 << 1, kDefault = kSemicolon | kNewLine };
 
     static void printFunctionVariable(astFunctionVariable *variable, int flags = kDefault ) {
         if (variable->isConst)
-            print("const ");
+            output("const ");
         printVariable((astVariable*)variable);
         if (variable->initialValue) {
-            print(" = ");
+            output(" = ");
             printExpression(variable->initialValue);
         }
-        if (flags & kSemicolon) print(";");
-        if (flags & kNewLine) print("\n");
+        if (flags & kSemicolon) output(";");
+        if (flags & kNewLine) output("\n");
     }
 
     static void printPostIncrement(astPostIncrementExpression *expression) {
         printExpression(expression->operand);
-        print("++");
+        output("++");
     }
 
     static void printPostDecrement(astPostDecrementExpression *expression) {
         printExpression(expression->operand);
-        print("--");
+        output("--");
     }
 
     static void printUnaryMinus(astUnaryMinusExpression *expression) {
-        print("-");
+        output("-");
         printExpression(expression->operand);
     }
 
     static void printUnaryPlus(astUnaryPlusExpression *expression) {
-        print("+");
+        output("+");
         printExpression(expression->operand);
     }
 
     static void printUnaryBitNot(astUnaryBitNotExpression *expression) {
-        print("~");
+        output("~");
         printExpression(expression->operand);
     }
 
     static void printUnaryLogicalNot(astUnaryLogicalNotExpression *expression) {
-        print("!");
+        output("!");
         printExpression(expression->operand);
     }
 
     static void printPrefixIncrement(astPrefixIncrementExpression *expression) {
-        print("++");
+        output("++");
         printExpression(expression->operand);
     }
 
     static void printPrefixDecrement(astPrefixDecrementExpression *expression) {
-        print("--");
+        output("--");
         printExpression(expression->operand);
     }
 
     static void printAssign(astAssignmentExpression *expression) {
         printExpression(expression->operand1);
-        print(" %s ", kOperators[expression->assignment]);
+        output(" %s ", kOperators[expression->assignment]);
         printExpression(expression->operand2);
     }
 
     static void printSequence(astSequenceExpression *expression) {
-        printf("(");
+        output("(");
         printExpression(expression->operand1);
-        printf(", ");
+        output(", ");
         printExpression(expression->operand2);
-        printf(")");
+        output(")");
     }
 
     static void printOperation(astOperationExpression *expression) {
-        printf("(");
+        output("(");
         printExpression(expression->operand1);
-        printf(" %s ", kOperators[expression->operation]);
+        output(" %s ", kOperators[expression->operation]);
         printExpression(expression->operand2);
-        printf(")");
+        output(")");
     }
 
     static void printTernary(astTernaryExpression *expression) {
-        printf("(");
+        output("(");
         printExpression(expression->condition);
-        printf(" ? ");
+        output(" ? ");
         printExpression(expression->onTrue);
-        printf(" : ");
+        output(" : ");
         printExpression(expression->onFalse);
-        printf(")");
+        output(")");
     }
 
     static void printExpression(astExpression *expression) {
@@ -390,14 +407,14 @@ namespace glsl {
     }
 
     static void printCompoundStatement(astCompoundStatement *statement) {
-        print(" {\n");
+        output(" {\n");
         for (size_t i = 0; i < statement->statements.size(); i++)
             printStatement(statement->statements[i]);
-        print("}\n");
+        output("}\n");
     }
 
     static void printEmptyStatement() {
-        print(";");
+        output(";");
     }
 
     static void printDeclarationStatement(astDeclarationStatement *statement, int flags = kDefault) {
@@ -407,44 +424,44 @@ namespace glsl {
 
     static void printExpressionStatement(astExpressionStatement *statement, int flags = kDefault) {
         printExpression(statement->expression);
-        if (flags & kSemicolon) print(";");
-        if (flags & kNewLine) print("\n");
+        if (flags & kSemicolon) output(";");
+        if (flags & kNewLine) output("\n");
     }
 
     static void printIfStetement(astIfStatement *statement) {
-        print("if(");
+        output("if(");
         printExpression(statement->condition);
-        print(")");
+        output(")");
         printStatement(statement->thenStatement);
         if (statement->elseStatement) {
-            print("else");
+            output("else");
             if (statement->elseStatement->type == astStatement::kIf)
-                print(" ");
+                output(" ");
             printStatement(statement->elseStatement);
         }
     }
 
     static void printSwitchStatement(astSwitchStatement *statement) {
-        print("switch(");
+        output("switch(");
         printExpression(statement->expression);
-        print(") {\n");
+        output(") {\n");
         for (size_t i = 0; i < statement->statements.size(); i++)
             printStatement(statement->statements[i]);
-        print("}\n");
+        output("}\n");
     }
 
     static void printCaseLabelStatement(astCaseLabelStatement *statement) {
         if (statement->isDefault)
-            print("default");
+            output("default");
         else {
-            print("case ");
+            output("case ");
             printExpression(statement->condition);
         }
-        print(":\n");
+        output(":\n");
     }
 
     static void printWhileStatement(astWhileStatement *statement) {
-        print("while(");
+        output("while(");
         switch (statement->condition->type) {
             case astStatement::kDeclaration:
                 printDeclarationStatement((astDeclarationStatement*)statement->condition, false);
@@ -453,26 +470,26 @@ namespace glsl {
                 printExpressionStatement((astExpressionStatement*)statement->condition, false);
                 break;
             default:
-                print("/* unexpected statement in while condition */\n");
+                output("/* unexpected statement in while condition */\n");
                 break;
         }
-        print(")");
+        output(")");
         printStatement(statement->body);
     }
 
     static void printDoStatement(astDoStatement *statement) {
-        print("do");
+        output("do");
         // deal with non compound (i.e scope) in do loops, e.g: do function_call(); while(expr);
         if (statement->body->type != astStatement::kCompound)
-            print(" ");
+            output(" ");
         printStatement(statement->body);
-        print("while(");
+        output("while(");
         printExpression(statement->condition);
-        print(");\n");
+        output(");\n");
     }
 
     static void printForStatement(astForStatement *statement) {
-        print("for(");
+        output("for(");
         if (statement->init) {
             switch (statement->init->type) {
                 case astStatement::kDeclaration:
@@ -482,77 +499,77 @@ namespace glsl {
                     printExpressionStatement((astExpressionStatement*)statement->init, kSemicolon);
                     break;
                 default:
-                    print("/* unexpected statement in while condition */\n");
+                    output("/* unexpected statement in while condition */\n");
                     break;
             }
         } else {
-            print(";");
+            output(";");
         }
         if (statement->condition) {
-            print(" ");
+            output(" ");
             printExpression(statement->condition);
         }
-        print(";");
+        output(";");
         if (statement->loop) {
-            print(" ");
+            output(" ");
             printExpression(statement->loop);
         }
-        print(")");
+        output(")");
         printStatement(statement->body);
     }
 
     static void printContinueStatement() {
-        print("continue;\n");
+        output("continue;\n");
     }
 
     static void printBreakStatement() {
-        print("break;\n");
+        output("break;\n");
     }
 
     static void printReturnStatement(astReturnStatement *statement) {
         if (statement->expression) {
-            print("return ");
+            output("return ");
             printExpression(statement->expression);
-            print(";\n");
+            output(";\n");
         } else {
-            print("return;\n");
+            output("return;\n");
         }
     }
 
     static void printDiscardStatement() {
-        print("discard;\n");
+        output("discard;\n");
     }
 
     static void printInclude(astIncludeStatement* include) {
-        printf("#include \"%s\"\n", include->name);
+        output("#include \"%s\"\n", include->name);
     }
 
     static void printDefine(astDefineStatement* define) {
-        printf("#define %s", define->name);
+        output("#define %s", define->name);
 
         if (!define->parameters.empty()) {
-            print("(");
+            output("(");
             for (size_t i = 0; i < define->parameters.size(); i++) {
-                print("%s", define->parameters[i]);
+                output("%s", define->parameters[i]);
                 if (i != define->parameters.size() - 1) {
-                    print(", ");
+                    output(", ");
                 }
             }
-            print(")");
+            output(")");
         }
 
-        print(" ");
+        output(" ");
 
         if (define->value)
             printExpression(define->value);
 
-        print("\n");
+        output("\n");
     }
 
     static void printIfDirective(astIfDirectiveStatement* directive) {
-        print("#if ");
+        output("#if ");
         printExpression(directive->value);
-        print("\n");
+        output("\n");
         if (!directive->thenNodes.empty()) {
             printNodes(directive->thenNodes);
         }
@@ -562,9 +579,9 @@ namespace glsl {
     }
 
     static void printIfDefDirective(astIfDefDirectiveStatement* directive) {
-        print("#ifdef ");
+        output("#ifdef ");
         printExpression(directive->value);
-        print("\n");
+        output("\n");
         if (!directive->thenNodes.empty()) {
             printNodes(directive->thenNodes);
         }
@@ -574,9 +591,9 @@ namespace glsl {
     }
 
     static void printIfNDefDirective(astIfNDefDirectiveStatement* directive) {
-        print("#ifndef ");
+        output("#ifndef ");
         printExpression(directive->value);
-        print("\n");
+        output("\n");
         if (!directive->thenNodes.empty()) {
             printNodes(directive->thenNodes);
         }
@@ -587,16 +604,16 @@ namespace glsl {
 
     static void printElseDirective(astElseDirectiveStatement* directive) {
         if (directive->value) {
-            print("#elif ");
+            output("#elif ");
             printExpression(directive->value);
-            print("\n");
+            output("\n");
         } else {
-            print("#else\n");
+            output("#else\n");
         }
     }
 
     static void printEndIfDirective(astEndIfDirectiveStatement*) {
-        print("#endif\n");
+        output("#endif\n");
     }
 
     static void printStatement(astStatement *statement) {
@@ -644,7 +661,7 @@ namespace glsl {
             case astStatement::kEndIfDirective:
                 return printEndIfDirective((astEndIfDirectiveStatement*) statement);
         }
-        print("\n");
+        output("\n");
     }
 
     static void printFunctionParameter(astFunctionParameter *parameter) {
@@ -654,79 +671,79 @@ namespace glsl {
         printPrecision(parameter->precision);
         printType(parameter->baseType);
         if (parameter->name)
-            print(" %s", parameter->name);
+            output(" %s", parameter->name);
         if (parameter->isArray)
             printArraySize(parameter->arraySizes);
     }
 
     static void printFunction(astFunction *function) {
         printType(function->returnType);
-        print(" %s(", function->name);
+        output(" %s(", function->name);
         for (size_t i = 0; i < function->parameters.size(); i++)
             printFunctionParameter(function->parameters[i]);
-        print(")");
+        output(")");
         if (function->isPrototype) {
-            print(";\n");
+            output(";\n");
             return;
         }
-        print(" {\n");
+        output(" {\n");
         for (size_t i = 0; i < function->statements.size(); i++)
             printStatement(function->statements[i]);
-        print("}\n");
+        output("}\n");
     }
 
     static void printStructure(astStruct *structure) {
-        print("struct ");
+        output("struct ");
         if (structure->name)
-            print("%s ", structure->name);
-        print("{\n");
+            output("%s ", structure->name);
+        output("{\n");
         for (size_t i = 0; i < structure->fields.size(); i++) {
             printVariable(structure->fields[i]);
-            print(";\n");
+            output(";\n");
         }
-        print("};\n");
+        output("};\n");
     }
 
     static void printInterfaceBlock(astInterfaceBlock *block) {
         printStorage(block->storage);
-        printf("%s ", block->name);
-        printf("{\n");
+        output("%s ", block->name);
+        output("{\n");
         for (size_t i = 0; i < block->fields.size(); i++) {
             printVariable(block->fields[i]);
-            print(";\n");
+            output(";\n");
         }
-        printf("};\n");
+        output("};\n");
     }
 
     static void printVersionDirective(astVersionDirective *version) {
-        printf("#version %d ", version->version);
+        output("#version %d ", version->version);
         switch (version->type) {
             case kCore:
-                printf("core\n");
+                output("core\n");
                 break;
             case kCompatibility:
-                printf("compatibility\n");
+                output("compatibility\n");
                 break;
             case kES:
-                printf("es\n");
+                output("es\n");
                 break;
         }
     }
 
     static void printExtensionDirective(astExtensionDirective *extension) {
-        printf("#extension %s : ", extension->name);
+        output("#extension %s : ", extension->name);
         switch (extension->behavior) {
             case kEnable:
-                printf("enable\n");
+                output("enable\n");
                 break;
             case kRequire:
-                printf("require\n");
+                output("require\n");
                 break;
             case kWarn:
-                printf("warn\n");
+                output("warn\n");
                 break;
             case kDisable:
-                printf("disable\n");
+                output("disable\n");
                 break;
         }
     }
@@ -740,7 +757,7 @@ namespace glsl {
                     astType* type = (astType*) el;
 
                     if (type->typeType == astType::kBuiltin) {
-                        print("// not printing a builtin type inside of a tu node\n");
+                        output("// not printing a builtin type inside of a tu node\n");
                         continue;
                     }
 
@@ -759,7 +776,7 @@ namespace glsl {
                     astVariable* variable = (astVariable*) el;
 
                     if (variable->type != astVariable::kGlobal) {
-                        print("// not printing a non-global variable inside of a tu node\n");
+                        output("// not printing a non-global variable inside of a tu node\n");
                         continue;
                     }
 
@@ -775,13 +792,15 @@ namespace glsl {
                 }
                     break;
                 default:
-                    print("/* unexpected node */\n");
+                    output("/* unexpected node */\n");
                     break;
             }
         }
     }
 
-    void printTU(astTU *tu) {
+    std::string printTU(astTU *tu) {
         printNodes(tu->nodes);
+
+        return buffer;
     }
 }

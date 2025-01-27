@@ -81,7 +81,8 @@ int main(int argc, char **argv) {
         parser p(&contents[0], sources[i].fileName);
         astTU *tu = p.parse(sources[i].shaderType, &builtinVariables);
         if (tu) {
-            printTU(tu);
+            std::string result = printTU(tu);
+            printf("%s\n", result.c_str());
         } else {
             fprintf(stderr, "%s\n", p.error());
         }

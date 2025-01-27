@@ -42,6 +42,10 @@ Check out the superior diagnostics [here](EXAMPLE_ERRORS.md)
   * Small (~90 KB)
   * Permissive (MIT)
 
+**WARNING**: The printer part uses a global variable as buffer to generate the new file so it's not thread-safe.
+Using a context and passing it around might be something to look into in the future,
+but should be enough for our purposes for now.
+
 **NOTE**: This version is updated and customized for usage in linux-wallpaperengine and might not be what you're looking
 to use in the long run. Thanks to the original creator [graphitemaster](https://github.com/graphitemaster/glsl-parser)
 for the library that served as base for this.
