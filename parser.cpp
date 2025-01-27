@@ -1272,7 +1272,7 @@ astExpression *parser::parseUnary(endCondition condition, bool allow_undefined) 
             if (!next()) return nullptr; // skip '?'
             auto *expression = GC_NEW astTernaryExpression();
             expression->condition = operand;
-            expression->onTrue = parseExpression(kEndConditionColon);
+            expression->onTrue = parseExpression(kEndConditionColon, allow_undefined);
             if (!isOperator(kOperator_colon)) {
                 fatal("expected `:' for else case in ternary statement");
                 return nullptr;
