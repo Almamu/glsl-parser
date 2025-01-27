@@ -440,9 +440,7 @@ namespace glsl {
         output(")");
         printStatement(statement->thenStatement);
         if (statement->elseStatement) {
-            output("else");
-            if (statement->elseStatement->type == astStatement::kIf)
-                output(" ");
+            output("else ");
             printStatement(statement->elseStatement);
         }
     }
