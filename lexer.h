@@ -10,7 +10,8 @@ namespace glsl {
 
 // Types
 #define TYPE(X) kType_##X,
-enum {
+enum tokenTypes {
+    kType_Unknown,
     #include "lexemes.h"
 };
 #undef TYPE
@@ -19,7 +20,7 @@ enum {
 // Keywords
 #undef KEYWORD
 #define KEYWORD(X) kKeyword_##X,
-enum {
+enum keywordTypes {
     #include "lexemes.h"
 };
 #undef KEYWORD
@@ -28,7 +29,7 @@ enum {
 // Operators
 #undef OPERATOR
 #define OPERATOR(X, ...) kOperator_##X,
-enum {
+enum operatorTypes {
     #include "lexemes.h"
 };
 #undef OPERATOR
@@ -70,9 +71,9 @@ struct directive {
         kElIf,
         kEndIf,
         kDefine,
-    };
+    } type;
 
-    int type; // kVersion, kExtension
+    //int type; // kVersion, kExtension
 
     union {
         struct {
@@ -109,13 +110,13 @@ private:
     token();
     friend struct lexer;
     friend struct parser;
-    int m_type;
+    tokenTypes m_type;
     union {
         char *asIdentifier;
         directive asDirective;
         int asInt;
-        int asKeyword;
-        int asOperator;
+        keywordTypes asKeyword;
+        operatorTypes asOperator;
         unsigned asUnsigned;
         float asFloat;
         double asDouble;
@@ -137,7 +138,7 @@ struct lexer {
     lexer(const char *data);
 
     token read();
-    token peek(bool ignore_eol = true);
+    token peek(bool ignore_eol = true, bool ignore_whitespace = true);
 
     const char *error() const;
 
@@ -155,7 +156,7 @@ protected:
     int at(int offset = 0) const;
 
     void read(token &out);
-    void read(token &out, bool, bool ignore_eol = true);
+    void read(token &out, bool, bool ignore_eol = true, bool ignore_whitespace = true);
 
     void skipWhitespace(bool allowNewlines = false);
 

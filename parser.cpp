@@ -303,10 +303,21 @@ bool parser::isBuiltin() const {
 #define TYPENAME(...)
 
 /// The parser entry point
-CHECK_RETURN astTU *parser::parse(int type, astTU* parent) {
-    m_ast = new astTU(type, parent);
+CHECK_RETURN astTU *parser::parse(int type, vector<const char*>* builtinVariables) {
+    m_ast = new astTU(type);
     m_scopes.push_back(scope());
     m_defines.push_back(defineScope());
+
+    if (builtinVariables) {
+        for (size_t i = 0; i < (*builtinVariables).size(); i++) {
+            astDefineStatement *define = GC_NEW(astDefineStatement) astDefineStatement();
+
+            define->name = strnew((*builtinVariables)[i]);
+
+            m_defines.back().push_back(define);
+        }
+    }
+
     for (;;) {
         m_lexer.read(m_token, true);
 
@@ -384,37 +395,14 @@ CHECK_RETURN astTU *parser::parse(int type, astTU* parent) {
                 m_ast->statements.push_back(ifdef);
                 m_ast->nodes.push_back(ifdef);
                 continue;
-            } else if (m_token.asDirective.type == directive::kEndIf) {
-                m_ast->statements.push_back(GC_NEW(astEndIfDirectiveStatement) astEndIfDirectiveStatement());
-                m_ast->nodes.push_back(m_ast->statements.back());
-                // special case, endif doesn't have anything in it and is the end of parsing the current token
-                return m_ast;
-            } else if (m_token.asDirective.type == directive::kElse) {
-                m_ast->elseDirective = GC_NEW(astElseDirectiveStatement) astElseDirectiveStatement();
-                m_ast->nodes.push_back(m_ast->elseDirective);
-
-                astTU* previous = m_ast;
-                m_ast->elseDirective->thenStatement = parse(m_ast->type, m_ast);
-                m_ast = previous;
-                return m_ast;
-            } else if (m_token.asDirective.type == directive::kElIf) {
-                m_ast->elseDirective = GC_NEW(astElseDirectiveStatement) astElseDirectiveStatement();
-                m_ast->nodes.push_back(m_ast->elseDirective);
-
-                if (!next(false)) {
-                    return 0;
-                }
-
-                m_ast->elseDirective->value = parseExpression(kEndConditionLineFeed, true);
-                astTU* previous = m_ast;
-                m_ast->elseDirective->thenStatement = parse(m_ast->type, m_ast);
-                m_ast = previous;
-                continue;
+            } else {
+                fatal("unexpected directive %d", m_token.asDirective.type);
+                return 0;
             }
         }
 
         vector<topLevel> items;
-        if (!parseTopLevel(items))
+        if (!parseTopLevel(items, &m_ast->nodes))
             return 0;
 
         if (isType(kType_semicolon)) {
@@ -740,14 +728,14 @@ static bool isReservedKeyword(int keyword) {
         || keyword == kKeyword_using;
 }
 
-CHECK_RETURN bool parser::parseTopLevelItem(topLevel &level, topLevel *continuation) {
+CHECK_RETURN bool parser::parseTopLevelItem(topLevel &level, vector<astBase*>* nodes, topLevel *continuation) {
     vector<topLevel> items;
     while (!isBuiltin() && !isType(kType_identifier)) {
         // If this is an empty file don't get caught in this loop indefinitely
         token peek = m_lexer.peek();
         if (IS_TYPE(peek, kType_eof))
             return false;
-        if (IS_TYPE(peek, kType_end_of_line)) {
+        if (isType(kType_end_of_line)) {
             m_lexer.read(m_token, true);
             continue;
         }
@@ -777,7 +765,7 @@ CHECK_RETURN bool parser::parseTopLevelItem(topLevel &level, topLevel *continuat
             if (!unique)
                 return false;
             m_ast->interfaceBlocks.push_back(unique);
-            m_ast->nodes.push_back(unique);
+            nodes->push_back(unique);
             if (isType(kType_semicolon)) {
                 return true;
             } else {
@@ -789,7 +777,7 @@ CHECK_RETURN bool parser::parseTopLevelItem(topLevel &level, topLevel *continuat
             if (!unique)
                 return false;
             m_ast->structures.push_back(unique);
-            m_ast->nodes.push_back(unique);
+            nodes->push_back(unique);
             if (isType(kType_semicolon))
             {
                 return true;
@@ -810,11 +798,11 @@ CHECK_RETURN bool parser::parseTopLevelItem(topLevel &level, topLevel *continuat
 
     for (size_t i = 0; i < items.size(); i++) {
         topLevel &next = items[i];
-        const int storage = level.storage != -1 ? level.storage : next.storage;
+        const int storage = level.storage != kStorageUnknown ? level.storage : next.storage;
         if (m_ast->type == astTU::kVertex && storage == kIn) {
             // "It's a compile-time error to use any auxiliary or interpolation
             //  qualifiers on a vertex shader input"
-            if (level.auxiliary != -1 || next.auxiliary != -1) {
+            if (level.auxiliary != kAuxiliaryUnknown || next.auxiliary != kAuxiliaryUnknown) {
                 fatal("cannot use auxiliary storage qualifier on vertex shader input");
                 return false;
             } else if (level.interpolation != -1 || next.interpolation != -1) {
@@ -851,10 +839,10 @@ CHECK_RETURN bool parser::parseTopLevelItem(topLevel &level, topLevel *continuat
                 return false;
             }
         }
-        if (next.storage != -1 && level.storage != -1) {
+        if (next.storage != kStorageUnknown && level.storage != kStorageUnknown) {
             fatal("multiple storage qualifiers in declaration");
             return false;
-        } else if (next.auxiliary != -1 && level.auxiliary != -1) {
+        } else if (next.auxiliary != kAuxiliaryUnknown && level.auxiliary != kAuxiliaryUnknown) {
             fatal("multiple auxiliary storage qualifiers in declaration");
             return false;
         } else if (next.interpolation != -1 && level.interpolation != -1) {
@@ -890,7 +878,7 @@ CHECK_RETURN bool parser::parseTopLevelItem(topLevel &level, topLevel *continuat
     if (!continuation && !level.type) {
         if (isType(kType_identifier)) {
             level.type = findType(m_token.asIdentifier);
-            if (!next()) // skip identifier
+            if (level.type && !next()) // skip identifier
                 return false;
         } else {
             level.type = parseBuiltin();
@@ -965,9 +953,9 @@ CHECK_RETURN bool parser::parseTopLevelItem(topLevel &level, topLevel *continuat
     return true;
 }
 
-CHECK_RETURN bool parser::parseTopLevel(vector<topLevel> &items) {
+CHECK_RETURN bool parser::parseTopLevel(vector<topLevel> &items, vector<astBase*>* nodes) {
     topLevel item;
-    if (!parseTopLevelItem(item))
+    if (!parseTopLevelItem(item, nodes))
         return false;
     if (item.type)
         items.push_back(item);
@@ -975,7 +963,7 @@ CHECK_RETURN bool parser::parseTopLevel(vector<topLevel> &items) {
         if (!next())
             return false; // skip ','
         topLevel nextItem;
-        if (!parseTopLevelItem(nextItem, &items.front()))
+        if (!parseTopLevelItem(nextItem, nodes, &items.front()))
             return false;
         if (nextItem.type)
             items.push_back(nextItem);
@@ -1001,7 +989,7 @@ CHECK_RETURN T *parser::parseBlock(const char* type) {
 
     vector<topLevel> items;
     while (!isType(kType_scope_end)) {
-        if (!parseTopLevel(items))
+        if (!parseTopLevel(items, &m_ast->nodes))
             return 0;
         if (!next())
             return 0;
@@ -1069,7 +1057,7 @@ CHECK_RETURN astInterfaceBlock *parser::parseInterfaceBlock(int storage) {
     return 0;
 }
 
-CHECK_RETURN astExpression *parser::parseBinary(int lhsPrecedence, astExpression *lhs, endCondition end) {
+CHECK_RETURN astExpression *parser::parseBinary(int lhsPrecedence, astExpression *lhs, endCondition end, bool allow_undefined) {
     // Precedence climbing
     while (!isEndCondition(end)) {
         int binaryPrecedence = m_token.precedence();
@@ -1080,7 +1068,7 @@ CHECK_RETURN astExpression *parser::parseBinary(int lhsPrecedence, astExpression
         if (!next(!(end & kEndConditionLineFeed)))
             return 0;
 
-        astExpression *rhs = parseUnary(end);
+        astExpression *rhs = parseUnary(end, allow_undefined);
         if (!rhs)
             return 0;
         if (!next(!(end & kEndConditionLineFeed)))
@@ -1095,23 +1083,24 @@ CHECK_RETURN astExpression *parser::parseBinary(int lhsPrecedence, astExpression
                     ? ((astArraySubscript*)find)->operand
                     : ((astFieldOrSwizzle*)find)->operand;
             }
-            if (find->type != astExpression::kVariableIdentifier) {
+            if (find->type == astExpression::kVariableIdentifier) {
+                astVariable *variable = ((astVariableIdentifier*)lhs)->variable;
+                if (variable->type == astVariable::kGlobal) {
+                    astGlobalVariable *global = (astGlobalVariable*)variable;
+                    // "It's a compile-time error to write to a variable declared as an input"
+                    if (global->storage == kIn) {
+                        fatal("cannot write to a variable declared as input");
+                        return 0;
+                    }
+                    // "It's a compile-time error to write to a const variable outside of its declaration."
+                    if (global->storage == kConst) {
+                        fatal("cannot write to a const variable outside of its declaration");
+                        return 0;
+                    }
+                }
+            } else if (find->type != astExpression::kDefineIdentifier) {
                 fatal("not a valid lvalue");
                 return 0;
-            }
-            astVariable *variable = ((astVariableIdentifier*)lhs)->variable;
-            if (variable->type == astVariable::kGlobal) {
-                astGlobalVariable *global = (astGlobalVariable*)variable;
-                // "It's a compile-time error to write to a variable declared as an input"
-                if (global->storage == kIn) {
-                    fatal("cannot write to a variable declared as input");
-                    return 0;
-                }
-                // "It's a compile-time error to write to a const variable outside of its declaration."
-                if (global->storage == kConst) {
-                    fatal("cannot write to a const variable outside of its declaration");
-                    return 0;
-                }
             }
         }
 
@@ -1119,7 +1108,7 @@ CHECK_RETURN astExpression *parser::parseBinary(int lhsPrecedence, astExpression
 
         // climb
         if (binaryPrecedence < rhsPrecedence) {
-            if (!(rhs = parseBinary(binaryPrecedence + 1, rhs, end)))
+            if (!(rhs = parseBinary(binaryPrecedence + 1, rhs, end, allow_undefined)))
                 return 0;
         }
 
@@ -1133,7 +1122,7 @@ CHECK_RETURN astExpression *parser::parseBinary(int lhsPrecedence, astExpression
 CHECK_RETURN astExpression *parser::parseUnaryPrefix(endCondition condition, bool allow_undefined) {
     if (isOperator(kOperator_paranthesis_begin)) {
         if (!next()) return 0; // skip '('
-        return parseExpression(kEndConditionParanthesis);
+        return parseExpression(kEndConditionParanthesis, allow_undefined);
     } else if (isOperator(kOperator_logical_not)) {
         if (!next()) return 0; // skip '!'
         return GC_NEW(astExpression) astUnaryLogicalNotExpression(parseUnary(condition));
@@ -1145,7 +1134,7 @@ CHECK_RETURN astExpression *parser::parseUnaryPrefix(endCondition condition, boo
         return GC_NEW(astExpression) astUnaryPlusExpression(parseUnary(condition));
     } else if (isOperator(kOperator_minus)) {
         if (!next()) return 0; // skip '-'
-        return GC_NEW(astExpression) astUnaryMinusExpression(parseUnary(condition));
+        return GC_NEW(astExpression) astUnaryMinusExpression(parseUnary(condition, allow_undefined));
     } else if (isOperator(kOperator_increment)) {
         if (!next()) return 0; // skip '++'
         return GC_NEW(astExpression) astPrefixIncrementExpression(parseUnary(condition));
@@ -1153,15 +1142,15 @@ CHECK_RETURN astExpression *parser::parseUnaryPrefix(endCondition condition, boo
         if (!next()) return 0; // skip '--'
         return GC_NEW(astExpression) astPrefixDecrementExpression(parseUnary(condition));
     } else if (isBuiltin()) {
-        return parseConstructorCall();
+        return parseConstructorCall(allow_undefined);
     } else if (isType(kType_identifier)) {
         token peek = m_lexer.peek(!(condition & kEndConditionLineFeed));
         if (IS_OPERATOR(peek, kOperator_paranthesis_begin)) {
             astType *type = findType(m_token.asIdentifier);
             if (type)
-                return parseConstructorCall();
+                return parseConstructorCall(allow_undefined);
             else
-                return parseFunctionCall();
+                return parseFunctionCall(allow_undefined);
         } else {
             astVariable *find = findVariable(m_token.asIdentifier);
             if (find)
@@ -1304,11 +1293,11 @@ CHECK_RETURN astExpression *parser::parseExpression(endCondition condition, bool
         return 0;
     if (!next(!(condition & kEndConditionLineFeed))) // skip last
         return 0;
-    return parseBinary(0, lhs, condition);
+    return parseBinary(0, lhs, condition, allow_undefined);
 }
 
-CHECK_RETURN astExpressionStatement *parser::parseExpressionStatement(endCondition condition) {
-    astExpression *expression = parseExpression(condition);
+CHECK_RETURN astExpressionStatement *parser::parseExpressionStatement(endCondition condition, bool allow_undefined) {
+    astExpression *expression = parseExpression(condition, allow_undefined);
     return expression ? GC_NEW(astStatement) astExpressionStatement(expression) : 0;
 }
 
@@ -1569,7 +1558,7 @@ CHECK_RETURN astWhileStatement *parser::parseWhileStatement() {
     return statement;
 }
 
-CHECK_RETURN astDeclarationStatement *parser::parseDeclarationStatement(endCondition condition) {
+CHECK_RETURN astDeclarationStatement *parser::parseDeclarationStatement(endCondition condition, bool allow_undefined) {
     m_lexer.backup();
 
     bool isConst = false;
@@ -1631,7 +1620,7 @@ CHECK_RETURN astDeclarationStatement *parser::parseDeclarationStatement(endCondi
         if (isOperator(kOperator_assign)) {
             if (!next()) // skip '='
                 return 0;
-            if (!(initialValue = parseExpression(kEndConditionComma | condition)))
+            if (!(initialValue = parseExpression(kEndConditionComma | condition, allow_undefined)))
                 return 0;
         }
 
@@ -1667,12 +1656,12 @@ CHECK_RETURN astDeclarationStatement *parser::parseDeclarationStatement(endCondi
     return statement;
 }
 
-CHECK_RETURN astSimpleStatement *parser::parseDeclarationOrExpressionStatement(endCondition condition) {
-    astSimpleStatement *declaration = parseDeclarationStatement(condition);
+CHECK_RETURN astSimpleStatement *parser::parseDeclarationOrExpressionStatement(endCondition condition, bool allow_undefined) {
+    astSimpleStatement *declaration = parseDeclarationStatement(condition, allow_undefined);
     if (declaration) {
         return declaration;
     } else {
-        return parseExpressionStatement(condition);
+        return parseExpressionStatement(condition, allow_undefined);
     }
 }
 
@@ -1684,17 +1673,29 @@ CHECK_RETURN astDefineStatement* parser::parseDefineDirective() {
         // add the define to the scope
         m_defines.back().push_back(define);
 
-        token token = m_lexer.peek(false);
+        token token = m_lexer.peek(false, false);
 
         if (IS_TYPE(token, kType_end_of_line)) {
             return define;
+        }
+
+        if (!IS_TYPE(token, kType_whitespace)) {
+            if (!next()) // skip '('
+                return 0;
+            while (!isOperator(kOperator_paranthesis_end)) {
+                if (isType(kType_identifier)) {
+                    define->parameters.push_back(strnew (m_token.asIdentifier));
+                }
+                if (!next())
+                    return 0;
+            }
         }
 
         if (!next(false)) {
             return 0;
         }
 
-        define->value = parseExpression(kEndConditionLineFeed);
+        define->value = parseExpression(kEndConditionLineFeed, true);
 
         if (!define->value) {
             return 0;
@@ -1707,138 +1708,197 @@ CHECK_RETURN astDefineStatement* parser::parseDefineDirective() {
     }
 }
 
-CHECK_RETURN astIfDirectiveStatement* parser::parseIfDirective() {
+CHECK_RETURN bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* out, bool is_in_root) {
+    if (!next(false)) {
+        return false;
+    }
+
+    out->value = parseExpression(kEndConditionLineFeed, true);
+
+    if (!out->value) {
+        return false;
+    }
+
+    while (!isType(kType_directive) ||
+           (m_token.asDirective.type != directive::kEndIf &&
+            m_token.asDirective.type != directive::kElse &&
+            m_token.asDirective.type != directive::kElIf)) {
+        if (isType(kType_end_of_line)) {
+            m_lexer.read(m_token, true);
+            continue;
+        }
+
+        // top level parsing has some issues as it doesn't accept statements
+        vector<topLevel> items;
+        if (is_in_root) {
+            // top level parsing might fail here and it's okay?
+            if (!parseTopLevel(items, &out->thenNodes)) {
+                return false;
+            }
+        }
+
+        if (isType(kType_semicolon)) {
+            for (size_t i = 0; i < items.size(); i++) {
+                topLevel &parse = items[i];
+                astGlobalVariable *global = GC_NEW(astVariable) astGlobalVariable();
+                global->storage = parse.storage;
+                global->auxiliary = parse.auxiliary;
+                global->memory = parse.memory;
+                global->precision = parse.precision;
+                global->interpolation = parse.interpolation;
+                global->baseType = parse.type;
+                global->name = strnew(parse.name);
+                global->isInvariant = parse.isInvariant;
+                global->isPrecise = parse.isPrecise;
+                global->layoutQualifiers = parse.layoutQualifiers;
+                if (parse.initialValue) {
+                    if (!(global->initialValue = evaluate(parse.initialValue)))
+                        return false;
+                }
+                global->isArray = parse.isArray;
+                global->arraySizes = parse.arraySizes;
+                out->thenNodes.push_back(global);
+                m_scopes.back().push_back(global);
+            }
+        } else if (isOperator(kOperator_paranthesis_begin)) {
+            astFunction *function = parseFunction(items.front());
+            if (!function)
+                return false;
+            out->thenNodes.push_back(function);
+        } else {
+            astStatement* statement = parseStatement(true);
+            if (!statement)
+                return false;
+            out->thenNodes.push_back(statement);
+        }
+
+        if (!next()) {
+            return false;
+        }
+    }
+
+    while (m_token.asDirective.type == directive::kElse || m_token.asDirective.type == directive::kElIf) {
+        astStatement* statement = parseStatement();
+
+        if (!statement) {
+            fatal("cannot parse directive as statement");
+            return false;
+        }
+
+        out->elseNodes.push_back(statement);
+
+        if (!next()) {
+            return false;
+        }
+
+        while (!isType(kType_directive) ||
+               (m_token.asDirective.type != directive::kEndIf &&
+                m_token.asDirective.type != directive::kElse &&
+                m_token.asDirective.type != directive::kElIf)) {
+            if (isType(kType_end_of_line)) {
+                m_lexer.read(m_token, true);
+                continue;
+            }
+
+            vector<topLevel> items;
+
+            if (is_in_root) {
+                // top level parsing might fail here and it's okay?
+                if (!parseTopLevel(items, &out->thenNodes)) {
+                    return false;
+                }
+            }
+
+            if (isType(kType_semicolon)) {
+                for (size_t i = 0; i < items.size(); i++) {
+                    topLevel &parse = items[i];
+                    astGlobalVariable *global = GC_NEW(astVariable) astGlobalVariable();
+                    global->storage = parse.storage;
+                    global->auxiliary = parse.auxiliary;
+                    global->memory = parse.memory;
+                    global->precision = parse.precision;
+                    global->interpolation = parse.interpolation;
+                    global->baseType = parse.type;
+                    global->name = strnew(parse.name);
+                    global->isInvariant = parse.isInvariant;
+                    global->isPrecise = parse.isPrecise;
+                    global->layoutQualifiers = parse.layoutQualifiers;
+                    if (parse.initialValue) {
+                        if (!(global->initialValue = evaluate(parse.initialValue)))
+                            return false;
+                    }
+                    global->isArray = parse.isArray;
+                    global->arraySizes = parse.arraySizes;
+                    out->elseNodes.push_back(global);
+                    m_scopes.back().push_back(global);
+                }
+            } else if (isOperator(kOperator_paranthesis_begin)) {
+                astFunction *function = parseFunction(items.front());
+                if (!function)
+                    return false;
+                out->elseNodes.push_back(function);
+            } else {
+                astStatement* statement = parseStatement();
+                if (!statement)
+                    return false;
+                out->elseNodes.push_back(statement);
+            }
+
+            if (!next()) {
+                return false;
+            }
+        }
+    }
+
+    if (m_token.asDirective.type != directive::kEndIf) {
+        fatal("ending an ifdef with an unexpected directive, must be endif");
+        return false;
+    }
+
+    // always add it on the else nodes as this simplifies parsing things
+    out->elseNodes.push_back(GC_NEW(astStatement) astEndIfDirectiveStatement());
+    return true;
+}
+
+CHECK_RETURN astIfDirectiveStatement* parser::parseIfDirective(bool is_in_root) {
     if (m_token.asDirective.type == directive::kIf) {
-        astIfDirectiveStatement* ifDef = GC_NEW(astIfDirectiveStatement) astIfDirectiveStatement();
+        astIfDirectiveStatement* ifdef = GC_NEW(astIfDirectiveStatement) astIfDirectiveStatement();
 
-        if (!next(false)) {
+        if (!parseIfDirectiveVariations(ifdef, is_in_root)) {
             return 0;
         }
 
-        ifDef->value = parseExpression(kEndConditionLineFeed, true);
-
-        if (!ifDef->value) {
-            return 0;
-        }
-
-        // there has to be some content as a then
-        astTU* previous = m_ast;
-        ifDef->thenStatement = parse(m_ast->type, m_ast);
-        m_ast = previous;
-
-        if (!ifDef->thenStatement) {
-            fatal ("Cannot parse if directive: %s", m_error);
-            return 0;
-        }
-
-        if (isType(kType_eof)) {
-            return ifDef;
-        }
-
-        // what comes next? else, elif or endif?
-        if (!isType(kType_directive)) {
-            fatal("ending an if with an unknown token");
-            return 0;
-        }
-
-        if (m_token.asDirective.type != directive::kEndIf) {
-            fatal("ending an ifdef with an unexpected directive, must be endif");
-            return 0;
-        }
-
-        return ifDef;
+        return ifdef;
     } else {
         fatal("expected a if directive");
         return 0;
     }
 }
 
-CHECK_RETURN astIfDefDirectiveStatement* parser::parseIfDefDirective() {
+CHECK_RETURN astIfDefDirectiveStatement* parser::parseIfDefDirective(bool is_in_root) {
     if (m_token.asDirective.type == directive::kIfDef) {
-        astIfDefDirectiveStatement* ifDef = GC_NEW(astIfDefDirectiveStatement) astIfDefDirectiveStatement();
+        astIfDefDirectiveStatement* ifdef = GC_NEW(astIfDefDirectiveStatement) astIfDefDirectiveStatement();
 
-        if (!next(false)) {
+        if (!parseIfDirectiveVariations(ifdef, is_in_root)) {
             return 0;
         }
 
-        ifDef->define = parseExpression(kEndConditionLineFeed, true);
-
-        if (!ifDef->define) {
-            return 0;
-        }
-
-        // there has to be some content as a then
-        astTU* previous = m_ast;
-        ifDef->thenStatement = parse(m_ast->type, m_ast);
-        m_ast = previous;
-
-        if (!ifDef->thenStatement) {
-            fatal ("Cannot parse ifdef directive: %s", m_error);
-            return 0;
-        }
-
-        if (isType(kType_eof)) {
-            return ifDef;
-        }
-
-        // what comes next? else, elif or endif?
-        if (!isType(kType_directive)) {
-            fatal("ending an ifdef with an unknown token");
-            return 0;
-        }
-
-        if (m_token.asDirective.type != directive::kEndIf) {
-            fatal("ending an ifdef with an unexpected directive, must be endif");
-            return 0;
-        }
-
-        return ifDef;
+        return ifdef;
     } else {
         fatal("expected a ifdef directive");
         return 0;
     }
 }
 
-CHECK_RETURN astIfNDefDirectiveStatement* parser::parseIfNDefDirective() {
+CHECK_RETURN astIfNDefDirectiveStatement* parser::parseIfNDefDirective(bool is_in_root) {
     if (m_token.asDirective.type == directive::kIfNDef) {
-        astIfNDefDirectiveStatement* ifndef = GC_NEW(astIfNDefDirectiveStatement) astIfNDefDirectiveStatement();
+        astIfNDefDirectiveStatement* ifdef = GC_NEW(astIfNDefDirectiveStatement) astIfNDefDirectiveStatement();
 
-        if (!next(false)) {
+        if (!parseIfDirectiveVariations(ifdef, is_in_root)) {
             return 0;
         }
 
-        ifndef->define = parseExpression(kEndConditionLineFeed, true);
-
-        if (!ifndef->define) {
-            return 0;
-        }
-
-        // there has to be some content as a then
-        astTU* previous = m_ast;
-        ifndef->thenStatement = parse(m_ast->type, m_ast);
-        m_ast = previous;
-
-        if (!ifndef->thenStatement) {
-            fatal ("Cannot parse ifdef directive: %s", m_error);
-            return 0;
-        }
-
-        if (isType(kType_eof)) {
-            return ifndef;
-        }
-
-        // what comes next? else, elif or endif?
-        if (!isType(kType_directive)) {
-            fatal("ending an ifdef with an unknown token");
-            return 0;
-        }
-
-        if (m_token.asDirective.type != directive::kEndIf) {
-            fatal("ending an ifdef with an unexpected directive, must be endif");
-            return 0;
-        }
-
-        return ifndef;
+        return ifdef;
     } else {
         fatal("expected a ifdef directive");
         return 0;
@@ -1856,23 +1916,34 @@ CHECK_RETURN astStatement* parser::parseDirective() {
     } else if (m_token.asDirective.type == directive::kDefine) {
         return parseDefineDirective();
     } else if (m_token.asDirective.type == directive::kIf) {
-        return parseIfDirective();
+        return parseIfDirective(false);
     } else if (m_token.asDirective.type == directive::kIfDef) {
-        return parseIfDefDirective();
+        return parseIfDefDirective(false);
     } else if (m_token.asDirective.type == directive::kIfNDef) {
-        return parseIfNDefDirective();
+        return parseIfNDefDirective(false);
     } else if (m_token.asDirective.type == directive::kEndIf) {
         if (!next())
             return 0;
 
-        return 0;
+        return GC_NEW(astStatement) astEndIfDirectiveStatement();
+    } else if (m_token.asDirective.type == directive::kElse) {
+        return GC_NEW(astStatement) astElseDirectiveStatement();
+    } else if (m_token.asDirective.type == directive::kElIf) {
+        astElseDirectiveStatement* elif = GC_NEW(astElseDirectiveStatement) astElseDirectiveStatement();
+
+        if (!next())
+            return 0;
+
+        elif->value = parseExpression(kEndConditionLineFeed, true);
+
+        return elif;
     } else {
         fatal("rest of directives not implemented yet!");
         return 0;
     }
 }
 
-CHECK_RETURN astStatement *parser::parseStatement() {
+CHECK_RETURN astStatement *parser::parseStatement(bool allow_undefined) {
     if (isType(kType_scope_begin)) {
         return parseCompoundStatement();
     } else if (isKeyword(kKeyword_if)) {
@@ -1900,7 +1971,7 @@ CHECK_RETURN astStatement *parser::parseStatement() {
     } else if (isType(kType_directive)) {
         return parseDirective();
     } else {
-        return parseDeclarationOrExpressionStatement(kEndConditionSemicolon);
+        return parseDeclarationOrExpressionStatement(kEndConditionSemicolon, allow_undefined);
     }
 }
 
@@ -2052,7 +2123,7 @@ astBuiltin *parser::parseBuiltin() {
 }
 #undef TYPENAME
 
-CHECK_RETURN astConstructorCall *parser::parseConstructorCall() {
+CHECK_RETURN astConstructorCall *parser::parseConstructorCall(bool allow_undefined) {
     astConstructorCall *expression = GC_NEW(astExpression) astConstructorCall();
     if (!(expression->type = parseBuiltin()))
         return 0;
@@ -2065,7 +2136,7 @@ CHECK_RETURN astConstructorCall *parser::parseConstructorCall() {
     if (!next()) // skip '('
         return 0;
     while (!isOperator(kOperator_paranthesis_end)) {
-        astExpression *parameter = parseExpression(kEndConditionComma | kEndConditionParanthesis);
+        astExpression *parameter = parseExpression(kEndConditionComma | kEndConditionParanthesis, allow_undefined);
         if (!parameter)
             return 0;
         expression->parameters.push_back(parameter);
@@ -2077,7 +2148,7 @@ CHECK_RETURN astConstructorCall *parser::parseConstructorCall() {
     return expression;
 }
 
-CHECK_RETURN astFunctionCall *parser::parseFunctionCall() {
+CHECK_RETURN astFunctionCall *parser::parseFunctionCall(bool allow_undefined) {
     astFunctionCall *expression = GC_NEW(astExpression) astFunctionCall();
     expression->name = strnew(m_token.asIdentifier);
     if (!next()) // skip identifier
@@ -2088,7 +2159,7 @@ CHECK_RETURN astFunctionCall *parser::parseFunctionCall() {
     }
     if (!next()) return 0; // skip '('
     while (!isOperator(kOperator_paranthesis_end)) {
-        astExpression *parameter = parseExpression(kEndConditionComma | kEndConditionParanthesis);
+        astExpression *parameter = parseExpression(kEndConditionComma | kEndConditionParanthesis, allow_undefined);
         if (!parameter)
             return 0;
         expression->parameters.push_back(parameter);
@@ -2100,8 +2171,8 @@ CHECK_RETURN astFunctionCall *parser::parseFunctionCall() {
     return expression;
 }
 
-CHECK_RETURN bool parser::next(bool ignore_eol) {
-    m_lexer.read(m_token, true, ignore_eol);
+CHECK_RETURN bool parser::next(bool ignore_eol, bool ignore_whitespace) {
+    m_lexer.read(m_token, true, ignore_eol, ignore_whitespace);
     if (isType(kType_eof)) {
         fatal("premature end of file");
         return false;

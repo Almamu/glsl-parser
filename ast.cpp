@@ -28,20 +28,18 @@ const char *astStatement::name() const {
     }
 }
 
-astTU::astTU(int type, astTU* parent)
+astTU::astTU(int type)
     : type(type)
     , versionDirective(0)
-    , elseDirective(0)
-    , parent(parent)
 {
 }
 
-astBase::astBase(int type)
+astBase::astBase(enum astBaseType type)
     : astType(type)
 {
 }
 
-astType::astType(int type)
+astType::astType(enum astTypeType type)
     : astNode<astType>(kType)
     , typeType(type)
 {
@@ -80,13 +78,13 @@ astBuiltin::astBuiltin(int type)
 {
 }
 
-astVariable::astVariable(int type)
+astVariable::astVariable(enum astVariableType type)
     : astNode<astVariable>(kVariable)
+    , type(type)
     , name(0)
     , baseType(0)
     , isArray(false)
     , isPrecise(false)
-    , type(type)
 {
 }
 
@@ -118,7 +116,7 @@ astGlobalVariable::astGlobalVariable()
 {
 }
 
-astSimpleStatement::astSimpleStatement(int type)
+astSimpleStatement::astSimpleStatement(enum astStatementType type)
     : astStatement(type)
 {
 }
@@ -138,7 +136,6 @@ astDefineStatement::astDefineStatement()
 astElseDirectiveStatement::astElseDirectiveStatement()
     : astSimpleStatement (astStatement::kElseDirective)
     , value (0)
-    , thenStatement (0)
 {
 }
 
@@ -149,23 +146,18 @@ astIncludeStatement::astIncludeStatement()
 }
 
 astIfDefDirectiveStatement::astIfDefDirectiveStatement()
-    : astStatement (astStatement::kIfDefDirective)
-    , define (0)
-    , thenStatement (0)
+    : astIfDirectiveStatement (astStatement::kIfDefDirective)
 {
 }
 
 astIfNDefDirectiveStatement::astIfNDefDirectiveStatement()
-    : astStatement (astStatement::kIfNDefDirective)
-    , define (0)
-    , thenStatement (0)
+    : astIfDirectiveStatement (astStatement::kIfNDefDirective)
 {
 }
 
-astIfDirectiveStatement::astIfDirectiveStatement()
-    : astStatement (astStatement::kIfDirective)
+astIfDirectiveStatement::astIfDirectiveStatement(astStatementType type)
+    : astStatement (type)
     , value (0)
-    , thenStatement (0)
 {
 }
 
@@ -205,7 +197,7 @@ astDeclaration::astDeclaration()
 {
 }
 
-astStatement::astStatement(int type)
+astStatement::astStatement(enum astStatementType type)
     : astNode<astStatement>(kStatement)
     , type(type)
 {
@@ -238,7 +230,7 @@ astCaseLabelStatement::astCaseLabelStatement()
 {
 }
 
-astIterationStatement::astIterationStatement(int type)
+astIterationStatement::astIterationStatement(enum astStatementType type)
     : astSimpleStatement(type)
 {
 }
@@ -266,7 +258,7 @@ astForStatement::astForStatement()
 {
 }
 
-astJumpStatement::astJumpStatement(int type)
+astJumpStatement::astJumpStatement(enum astStatementType type)
     : astStatement(type)
 {
 }
@@ -292,7 +284,7 @@ astDiscardStatement::astDiscardStatement()
 {
 }
 
-astExpression::astExpression(int type)
+astExpression::astExpression(enum astExpressionType type)
     : astNode<astExpression>(kExpression)
     , type(type)
 {
@@ -372,13 +364,13 @@ astConstructorCall::astConstructorCall()
 {
 }
 
-astUnaryExpression::astUnaryExpression(int type, astExpression *operand)
+astUnaryExpression::astUnaryExpression(enum astExpressionType type, astExpression *operand)
     : astExpression(type)
     , operand(operand)
 {
 }
 
-astBinaryExpression::astBinaryExpression(int type)
+astBinaryExpression::astBinaryExpression(enum astExpressionType type)
     : astExpression(type)
     , operand1(0)
     , operand2(0)

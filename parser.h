@@ -15,8 +15,8 @@ namespace glsl {
 
 struct topLevel {
     topLevel()
-        : storage(-1)
-        , auxiliary(-1)
+        : storage(kStorageUnknown)
+        , auxiliary(kAuxiliaryUnknown)
         , memory(0)
         , precision(-1)
         , interpolation(-1)
@@ -29,8 +29,8 @@ struct topLevel {
     {
     }
 
-    int storage;
-    int auxiliary;
+    storageType storage;
+    auxiliaryType auxiliary;
     int memory;
     int precision;
     int interpolation;
@@ -48,7 +48,7 @@ struct topLevel {
 struct parser {
     ~parser();
     parser(const char *source, const char *fileName);
-    CHECK_RETURN astTU *parse(int type, astTU* parse = 0);
+    CHECK_RETURN astTU *parse(int type, vector<const char*>* builtinVariables = 0);
 
     const char *error() const;
 
@@ -67,7 +67,7 @@ protected:
 
     typedef int endCondition;
 
-    CHECK_RETURN bool next(bool ignore_eol = true);
+    CHECK_RETURN bool next(bool ignore_eol = true, bool ignore_whitespace = true);
 
     CHECK_RETURN bool parseStorage(topLevel &current); // const, in, out, attribute, uniform, varying, buffer, shared
     CHECK_RETURN bool parseAuxiliary(topLevel &current); // centroid, sample, patch
@@ -78,8 +78,8 @@ protected:
     CHECK_RETURN bool parseMemory(topLevel &current); // coherent, volatile, restrict, readonly, writeonly
     CHECK_RETURN bool parseLayout(topLevel &current);
 
-    CHECK_RETURN bool parseTopLevelItem(topLevel &level, topLevel *continuation = 0);
-    CHECK_RETURN bool parseTopLevel(vector<topLevel> &top);
+    CHECK_RETURN bool parseTopLevelItem(topLevel &level, vector<astBase*>* nodes, topLevel *continuation = 0);
+    CHECK_RETURN bool parseTopLevel(vector<topLevel> &top, vector<astBase*>* nodes);
 
     CHECK_RETURN bool isType(int type) const;
     CHECK_RETURN bool isKeyword(int keyword) const;
@@ -102,26 +102,26 @@ protected:
     CHECK_RETURN astFunction *parseFunction(const topLevel &parse);
 
     // Call parsers
-    CHECK_RETURN astConstructorCall *parseConstructorCall();
-    CHECK_RETURN astFunctionCall *parseFunctionCall();
+    CHECK_RETURN astConstructorCall *parseConstructorCall(bool allow_undefined = false);
+    CHECK_RETURN astFunctionCall *parseFunctionCall(bool allow_undefined = false);
 
     // Expression parsers
     CHECK_RETURN astExpression *parseExpression(endCondition end, bool allow_undefined = false);
     CHECK_RETURN astExpression *parseUnary(endCondition end, bool allow_undefined = false);
-    CHECK_RETURN astExpression *parseBinary(int lhsPrecedence, astExpression *lhs, endCondition condition);
+    CHECK_RETURN astExpression *parseBinary(int lhsPrecedence, astExpression *lhs, endCondition condition, bool allow_undefined = false);
     CHECK_RETURN astExpression *parseUnaryPrefix(endCondition end, bool allow_undefined = false);
     CHECK_RETURN astConstantExpression *parseArraySize();
 
     // Statement parsers
-    CHECK_RETURN astStatement *parseStatement();
+    CHECK_RETURN astStatement *parseStatement(bool allow_undefined = false);
     CHECK_RETURN astSwitchStatement *parseSwitchStatement();
     CHECK_RETURN astCaseLabelStatement *parseCaseLabelStatement();
     CHECK_RETURN astForStatement *parseForStatement();
     CHECK_RETURN astCompoundStatement *parseCompoundStatement();
     CHECK_RETURN astIfStatement *parseIfStatement();
-    CHECK_RETURN astSimpleStatement *parseDeclarationOrExpressionStatement(endCondition condition);
-    CHECK_RETURN astDeclarationStatement *parseDeclarationStatement(endCondition condition);
-    CHECK_RETURN astExpressionStatement *parseExpressionStatement(endCondition condition);
+    CHECK_RETURN astSimpleStatement *parseDeclarationOrExpressionStatement(endCondition condition, bool allow_undefined = false);
+    CHECK_RETURN astDeclarationStatement *parseDeclarationStatement(endCondition condition, bool allow_undefined = false);
+    CHECK_RETURN astExpressionStatement *parseExpressionStatement(endCondition condition, bool allow_undefined = false);
     CHECK_RETURN astContinueStatement *parseContinueStatement();
     CHECK_RETURN astBreakStatement *parseBreakStatement();
     CHECK_RETURN astDiscardStatement *parseDiscardStatement();
@@ -130,9 +130,10 @@ protected:
     CHECK_RETURN astWhileStatement *parseWhileStatement();
 
     CHECK_RETURN astDefineStatement* parseDefineDirective();
-    CHECK_RETURN astIfDefDirectiveStatement* parseIfDefDirective();
-    CHECK_RETURN astIfNDefDirectiveStatement* parseIfNDefDirective();
-    CHECK_RETURN astIfDirectiveStatement* parseIfDirective();
+    CHECK_RETURN bool parseIfDirectiveVariations(astIfDirectiveStatement* out, bool is_in_root);
+    CHECK_RETURN astIfDefDirectiveStatement* parseIfDefDirective(bool is_in_root = true);
+    CHECK_RETURN astIfNDefDirectiveStatement* parseIfNDefDirective(bool is_in_root = true);
+    CHECK_RETURN astIfDirectiveStatement* parseIfDirective(bool is_in_root = true);
     CHECK_RETURN astStatement *parseDirective();
 
     astBinaryExpression *createExpression();

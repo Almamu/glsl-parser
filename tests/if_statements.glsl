@@ -3,7 +3,7 @@ void main() {
     float value2 = 12;
     float value3 = 13;
 
-    if (value1 == value2) {
+    if (value1 == value2 && value2 == value1) {
         value1 = 5;
     } else {
         value1 = 2;

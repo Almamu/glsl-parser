@@ -24,7 +24,7 @@ struct astMemory {
 };
 
 struct astBase {
-    enum {
+    enum astBaseType {
         kType,
         kVariable,
         kLayoutQualifier,
@@ -32,15 +32,14 @@ struct astBase {
         kDeclaration,
         kStatement,
         kExpression,
-    };
-    astBase(int type);
-    int astType;
+    } astType;
+    astBase(enum astBaseType type);
 };
 
 // Nodes are to inherit from astNode or astCollector
 template <typename T>
 struct astNode : astBase {
-    astNode(int type) : astBase(type) {}
+    astNode(enum astBaseType type) : astBase(type) {}
     void *operator new(size_t size, vector<astMemory> *collector) throw() {
         void *data = malloc(size);
         if (data)
@@ -68,7 +67,7 @@ struct astDefineStatement;
 struct astElseDirectiveStatement;
 
 struct astTU {
-    astTU(int type, astTU* parent = 0);
+    astTU(int type);
 
     enum {
         kCompute,
@@ -82,14 +81,12 @@ struct astTU {
     int type;
 
     astVersionDirective* versionDirective;
-    astElseDirectiveStatement* elseDirective;
     vector<astExtensionDirective*> extensionDirectives;
     vector<astStatement*> statements;
     vector<astFunction*> functions;
     vector<astGlobalVariable*> globals;
     vector<astStruct*> structures;
     vector<astInterfaceBlock*> interfaceBlocks;
-    astTU* parent;
 
     // nodes as read off the file
     vector<astBase*> nodes;
@@ -100,15 +97,14 @@ private:
 };
 
 struct astType : astNode<astType> {
-    enum {
+    enum astTypeType {
         kBuiltin,
         kStruct,
         kInterfaceBlock,
         kVersionDirective,
         kExtensionDirective
-    };
-    astType(int type);
-    int typeType;
+    } typeType;
+    astType(enum astTypeType type);
 };
 
 struct astBuiltin : astType {
@@ -150,18 +146,17 @@ enum {
 };
 
 struct astVariable : astNode<astVariable> {
-    enum {
+    enum astVariableType {
         kFunction,
         kParameter,
         kGlobal,
         kField
-    };
-    astVariable(int type);
+    } type;
+    astVariable(enum astVariableType type);
     char *name;
     struct astType *baseType;
     bool isArray;
     bool isPrecise;
-    int type;
     vector<astConstantExpression *> arraySizes;
 };
 
@@ -172,7 +167,8 @@ struct astFunctionVariable : astVariable {
 };
 
 // Storage qualifiers
-enum {
+enum storageType {
+    kStorageUnknown,
     kConst,
     kIn,
     kOut,
@@ -185,7 +181,8 @@ enum {
 };
 
 // Auxiliary storage qualifiers
-enum {
+enum auxiliaryType {
+    kAuxiliaryUnknown,
     kCentroid,
     kSample,
     kPatch,
@@ -247,8 +244,7 @@ struct astDeclaration : astNode<astDeclaration> {
 };
 
 struct astStatement : astNode<astStatement> {
-    astStatement(int type);
-    enum {
+    enum astStatementType {
         kCompound,
         kEmpty,
         kDeclaration,
@@ -270,13 +266,13 @@ struct astStatement : astNode<astStatement> {
         kIfDefDirective,
         kIfNDefDirective,
         kEndIfDirective,
-    };
-    int type;
+    } type;
+    astStatement(enum astStatementType type);
     const char *name() const;
 };
 
 struct astSimpleStatement : astStatement {
-    astSimpleStatement(int type);
+    astSimpleStatement(enum astStatementType type);
 };
 
 struct astCompoundStatement : astStatement {
@@ -292,31 +288,29 @@ struct astIncludeStatement : astSimpleStatement {
 struct astDefineStatement : astSimpleStatement {
     astDefineStatement();
     char* name;
+    vector<char*> parameters;
     astExpression* value;
 };
 
 struct astElseDirectiveStatement : astSimpleStatement {
     astElseDirectiveStatement();
     astExpression* value;
-    astTU* thenStatement;
-};
-
-struct astIfDefDirectiveStatement : astStatement {
-    astIfDefDirectiveStatement();
-    astExpression* define;
-    astTU *thenStatement;
-};
-
-struct astIfNDefDirectiveStatement : astStatement {
-    astIfNDefDirectiveStatement();
-    astExpression* define;
-    astTU *thenStatement;
+    vector<astBase*> elseNodes;
 };
 
 struct astIfDirectiveStatement : astStatement {
-    astIfDirectiveStatement();
+    astIfDirectiveStatement(astStatementType type = astStatement::kIfDirective);
     astExpression* value;
-    astTU *thenStatement;
+    vector<astBase*> thenNodes;
+    vector<astBase*> elseNodes;
+};
+
+struct astIfDefDirectiveStatement : astIfDirectiveStatement {
+    astIfDefDirectiveStatement();
+};
+
+struct astIfNDefDirectiveStatement : astIfDirectiveStatement {
+    astIfNDefDirectiveStatement();
 };
 
 struct astEndIfDirectiveStatement : astSimpleStatement {
@@ -357,7 +351,7 @@ struct astCaseLabelStatement : astSimpleStatement {
 };
 
 struct astIterationStatement : astSimpleStatement {
-    astIterationStatement(int type);
+    astIterationStatement(enum astStatementType type);
 };
 
 struct astWhileStatement : astIterationStatement {
@@ -381,7 +375,7 @@ struct astForStatement : astIterationStatement {
 };
 
 struct astJumpStatement : astStatement {
-    astJumpStatement(int type);
+    astJumpStatement(enum astStatementType type);
 };
 
 struct astContinueStatement : astJumpStatement {
@@ -402,9 +396,8 @@ struct astDiscardStatement : astJumpStatement {
 };
 
 struct astExpression : astNode<astExpression> {
-    astExpression(int type);
     // Base class
-    enum {
+    enum astExpressionType {
         kIntConstant,
         kUIntConstant,
         kFloatConstant,
@@ -429,8 +422,8 @@ struct astExpression : astNode<astExpression> {
         kAssign,
         kOperation,
         kTernary
-    };
-    int type;
+    } type;
+    astExpression(enum astExpressionType type);
 };
 
 struct astIntConstant : astExpression {
@@ -499,13 +492,13 @@ struct astConstructorCall : astExpression {
 
 struct astUnaryExpression : astExpression {
     // Base class
-    astUnaryExpression(int type, astExpression *operand);
+    astUnaryExpression(enum astExpressionType type, astExpression *operand);
     astExpression *operand;
 };
 
 struct astBinaryExpression : astExpression {
     // Base class
-    astBinaryExpression(int type);
+    astBinaryExpression(enum astExpressionType type);
     astExpression *operand1;
     astExpression *operand2;
 };

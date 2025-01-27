@@ -25,7 +25,7 @@ static const operatorInfo kOperators[] = {
 #define OPERATOR(...)
 
 token::token()
-    : m_type(0)
+    : m_type(kType_Unknown)
 {
     asDouble = 0.0;
 }
@@ -252,7 +252,7 @@ void lexer::read(token &out) {
             free(out.asIdentifier);
             out.asIdentifier = 0;
             out.m_type = kType_keyword;
-            out.asKeyword = int(i);
+            out.asKeyword = (keywordTypes) i;
             break;
         }
     } else if (at() == '#') {
@@ -450,8 +450,6 @@ void lexer::read(token &out) {
 
             define.push_back('\0');
 
-            skipWhitespace(false);
-
             // Do this late when nothing can fail so we don't leak memory.
             size_t name_len = strlen(&define[0]);
             char *name = (char*)malloc(name_len + 1);
@@ -473,6 +471,8 @@ void lexer::read(token &out) {
         case '\n':
             out.m_type = kType_end_of_line; // end of lines are a bit special, sadly
             m_location.advanceColumn();
+            m_location.line++;
+            m_location.column = 1;
             break;
         case '\t':
         case '\f':
@@ -691,18 +691,21 @@ vector<char> lexer::readNumeric(bool isOctalish, bool isHexish) {
     return digits;
 }
 
-token lexer::peek(bool ignore_eol) {
+token lexer::peek(bool ignore_eol, bool ignore_whitespace) {
     token out;
     backup();
-    read(out, true, ignore_eol);
+    read(out, true, ignore_eol, ignore_whitespace);
     restore();
     return out;
 }
 
-void lexer::read(token &out, bool, bool ignore_eol) {
+void lexer::read(token &out, bool, bool ignore_eol, bool ignore_whitespace) {
     do {
         read(out);
-    } while (((ignore_eol && out.m_type == kType_end_of_line) || out.m_type == kType_whitespace || out.m_type == kType_comment) && !m_error);
+    } while ((
+            (ignore_eol && out.m_type == kType_end_of_line) ||
+            (ignore_whitespace && out.m_type == kType_whitespace) ||
+            out.m_type == kType_comment) && !m_error);
 }
 
 const char *lexer::error() const {

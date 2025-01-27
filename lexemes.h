@@ -267,7 +267,6 @@ KEYWORD(cast)
 KEYWORD(namespace)
 KEYWORD(using)
 
-
 // Operators
 // name, string, precedence
 OPERATOR(paranthesis_begin,  "(",   17)

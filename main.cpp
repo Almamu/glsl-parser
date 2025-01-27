@@ -75,9 +75,11 @@ int main(int argc, char **argv) {
                 contents.insert(contents.end(), buffer, buffer + c);
             }
         }
+        vector<const char*> builtinVariables;
+        builtinVariables.push_back("gl_FragColor");
         contents.push_back('\0');
         parser p(&contents[0], sources[i].fileName);
-        astTU *tu = p.parse(sources[i].shaderType);
+        astTU *tu = p.parse(sources[i].shaderType, &builtinVariables);
         if (tu) {
             printTU(tu);
         } else {

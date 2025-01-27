@@ -28,6 +28,7 @@ namespace glsl {
 
     static void printExpression(astExpression *expression);
     static void printStatement(astStatement *statement);
+    static void printNodes(vector<astBase*> nodes);
 
     static void printBuiltin(astBuiltin *builtin) {
         print("%s", kTypes[builtin->type]);
@@ -451,6 +452,9 @@ namespace glsl {
             case astStatement::kExpression:
                 printExpressionStatement((astExpressionStatement*)statement->condition, false);
                 break;
+            default:
+                print("/* unexpected statement in while condition */\n");
+                break;
         }
         print(")");
         printStatement(statement->body);
@@ -476,6 +480,9 @@ namespace glsl {
                     break;
                 case astStatement::kExpression:
                     printExpressionStatement((astExpressionStatement*)statement->init, kSemicolon);
+                    break;
+                default:
+                    print("/* unexpected statement in while condition */\n");
                     break;
             }
         } else {
@@ -521,7 +528,20 @@ namespace glsl {
     }
 
     static void printDefine(astDefineStatement* define) {
-        printf("#define %s ", define->name);
+        printf("#define %s", define->name);
+
+        if (!define->parameters.empty()) {
+            print("(");
+            for (size_t i = 0; i < define->parameters.size(); i++) {
+                print("%s", define->parameters[i]);
+                if (i != define->parameters.size() - 1) {
+                    print(", ");
+                }
+            }
+            print(")");
+        }
+
+        print(" ");
 
         if (define->value)
             printExpression(define->value);
@@ -533,21 +553,36 @@ namespace glsl {
         print("#if ");
         printExpression(directive->value);
         print("\n");
-        printTU(directive->thenStatement);
+        if (!directive->thenNodes.empty()) {
+            printNodes(directive->thenNodes);
+        }
+        if (!directive->elseNodes.empty()) {
+            printNodes (directive->elseNodes);
+        }
     }
 
     static void printIfDefDirective(astIfDefDirectiveStatement* directive) {
         print("#ifdef ");
-        printExpression(directive->define);
+        printExpression(directive->value);
         print("\n");
-        printTU(directive->thenStatement);
+        if (!directive->thenNodes.empty()) {
+            printNodes(directive->thenNodes);
+        }
+        if (!directive->elseNodes.empty()) {
+            printNodes (directive->elseNodes);
+        }
     }
 
     static void printIfNDefDirective(astIfNDefDirectiveStatement* directive) {
         print("#ifndef ");
-        printExpression(directive->define);
+        printExpression(directive->value);
         print("\n");
-        printTU(directive->thenStatement);
+        if (!directive->thenNodes.empty()) {
+            printNodes(directive->thenNodes);
+        }
+        if (!directive->elseNodes.empty()) {
+            printNodes (directive->elseNodes);
+        }
     }
 
     static void printElseDirective(astElseDirectiveStatement* directive) {
@@ -558,12 +593,9 @@ namespace glsl {
         } else {
             print("#else\n");
         }
-        if (directive->thenStatement) {
-            printTU(directive->thenStatement);
-        }
     }
 
-    static void printEndIfDirective(astEndIfDirectiveStatement* directive) {
+    static void printEndIfDirective(astEndIfDirectiveStatement*) {
         print("#endif\n");
     }
 
@@ -699,67 +731,57 @@ namespace glsl {
         }
     }
 
-    void printTU(astTU *tu) {
-        /*
-        if (tu->versionDirective)
-            printVersionDirective(tu->versionDirective);
-        for (size_t i = 0; i < tu->extensionDirectives.size(); i++)
-            printExtensionDirective(tu->extensionDirectives[i]);
-        for (size_t i = 0; i < tu->statements.size(); i++)
-            printStatement(tu->statements[i]);
-        for (size_t i = 0; i < tu->structures.size(); i++)
-            printStructure(tu->structures[i]);
-        for (size_t i = 0; i < tu->interfaceBlocks.size(); i++)
-            printInterfaceBlock(tu->interfaceBlocks[i]);
-        for (size_t i = 0; i < tu->globals.size(); i++)
-            printGlobalVariable(tu->globals[i]);
-        for (size_t i = 0; i < tu->functions.size(); i++)
-            printFunction(tu->functions[i]);
-        if (tu->elseDirective)
-            printElseDirective (tu->elseDirective);*/
-        for (size_t i = 0; i < tu->nodes.size(); i++) {
-            astBase* el = tu->nodes[i];
+    void printNodes(vector<astBase*> nodes) {
+        for (size_t i = 0; i < nodes.size(); i++) {
+            astBase* el = nodes[i];
 
             switch (el->astType) {
                 case astBase::kType: {
-                        astType* type = (astType*) el;
+                    astType* type = (astType*) el;
 
-                        if (type->typeType == astType::kBuiltin) {
-                            print("// not printing a builtin type inside of a tu node\n");
-                            continue;
-                        }
-
-                        if (type->typeType == astType::kStruct) {
-                            printStructure((astStruct*) el);
-                        } else if (type->typeType == astType::kInterfaceBlock) {
-                            printInterfaceBlock((astInterfaceBlock*) el);
-                        } else if (type->typeType == astType::kExtensionDirective) {
-                            printExtensionDirective((astExtensionDirective*) el);
-                        } else if (type->typeType == astType::kVersionDirective) {
-                            printVersionDirective((astVersionDirective*) el);
-                        }
+                    if (type->typeType == astType::kBuiltin) {
+                        print("// not printing a builtin type inside of a tu node\n");
+                        continue;
                     }
+
+                    if (type->typeType == astType::kStruct) {
+                        printStructure((astStruct*) el);
+                    } else if (type->typeType == astType::kInterfaceBlock) {
+                        printInterfaceBlock((astInterfaceBlock*) el);
+                    } else if (type->typeType == astType::kExtensionDirective) {
+                        printExtensionDirective((astExtensionDirective*) el);
+                    } else if (type->typeType == astType::kVersionDirective) {
+                        printVersionDirective((astVersionDirective*) el);
+                    }
+                }
                     break;
                 case astBase::kVariable: {
-                        astVariable* variable = (astVariable*) el;
+                    astVariable* variable = (astVariable*) el;
 
-                        if (variable->type != astVariable::kGlobal) {
-                            print("// not printing a non-global variable inside of a tu node\n");
-                            continue;
-                        }
-
-                        printGlobalVariable((astGlobalVariable *) el);
+                    if (variable->type != astVariable::kGlobal) {
+                        print("// not printing a non-global variable inside of a tu node\n");
+                        continue;
                     }
+
+                    printGlobalVariable((astGlobalVariable *) el);
+                }
                     break;
                 case astBase::kStatement: {
-                        printStatement((astStatement *) el);
-                    }
+                    printStatement((astStatement *) el);
+                }
                     break;
                 case astBase::kFunction: {
-                        printFunction((astFunction *) el);
-                    }
+                    printFunction((astFunction *) el);
+                }
+                    break;
+                default:
+                    print("/* unexpected node */\n");
                     break;
             }
         }
+    }
+
+    void printTU(astTU *tu) {
+        printNodes(tu->nodes);
     }
 }
