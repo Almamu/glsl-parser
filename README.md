@@ -20,8 +20,8 @@ Check out the superior diagnostics [here](EXAMPLE_ERRORS.md)
 ### Known limitations
   * Does not support preprocessor directives
     * Does support `#version` and `#extension` though.
-    * Supports #ifdef, #if, #elif, #else and #endif although this implementation might be iffy
-  * Does not handle new-line termination with the backslack character `\`
+    * Supports `#ifdef`, `#if`, `#elif`, `#else` and `#endif` although this implementation might be iffy
+  * Does not handle new-line termination with the backslash character `\`
   * Not all of GLSL is supported, if you run into a missing feature open an issue.
   * None of the builtin functions or variables are provided, you must provide those yourself.
 
@@ -35,10 +35,8 @@ Check out the superior diagnostics [here](EXAMPLE_ERRORS.md)
   * Generate introspection information
 
 ### Portable and embeddable
-  * Written in portable C++03.
-    * Only uses *std::vector* from the standard library
+  * Only uses *std::vector* from the standard library
   * Exception free
-  * Doesn't use virtual functions
   * Small (~90 KB)
   * Permissive (MIT)
 
