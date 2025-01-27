@@ -69,7 +69,7 @@ namespace glsl {
     static void printFloatConstant(astFloatConstant *expression) {
         char format[1024];
         snprintf(format, sizeof format, "%g", expression->value);
-        if (!strchr(format, '.'))
+        if (!strchr(format, '.') && !strchr(format, 'e'))
             output("%g.0", expression->value);
         else
             output("%s", format);

@@ -114,12 +114,12 @@ astConstantExpression *parser::evaluate(astExpression *expression) {
         if (!operand)
             return nullptr;
         switch (operand->type) {
-        case astExpression::kIntConstant:    return ICONST_NEW(-IVAL(operand));
-        case astExpression::kFloatConstant:  return FCONST_NEW(-FVAL(operand));
-        case astExpression::kDoubleConstant: return DCONST_NEW(-DVAL(operand));
-        default:
-            fatal("invalid operation in constant expression");
-            return nullptr;
+            case astExpression::kIntConstant:    return ICONST_NEW(-IVAL(operand));
+            case astExpression::kFloatConstant:  return FCONST_NEW(-FVAL(operand));
+            case astExpression::kDoubleConstant: return DCONST_NEW(-DVAL(operand));
+            default:
+                fatal("invalid operation in constant expression");
+                return nullptr;
         }
     } else if (expression->type == astExpression::kUnaryPlus) {
         astExpression *operand = evaluate(((astUnaryExpression*)expression)->operand);
