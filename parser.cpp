@@ -487,9 +487,9 @@ bool parser::parseAuxiliary(topLevel &current) {
     if (isKeyword(kKeyword_centroid)) {
         current.auxiliary = kCentroid;
         if (!next()) return false; // skip 'centroid'
-    } else if (isKeyword(kKeyword_sample)) {
+    /*} else if (isKeyword(kKeyword_sample)) {
         current.auxiliary = kSample;
-        if (!next()) return false; // skip 'sample'
+        if (!next()) return false; // skip 'sample'*/
     } else if (isKeyword(kKeyword_patch)) {
         current.auxiliary = kPatch;
         if (!next()) return false; // skip 'patch'
