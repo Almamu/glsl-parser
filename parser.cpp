@@ -5,10 +5,12 @@
 
 namespace glsl {
 
-parser::parser(const char *source, const char *fileName)
+parser::parser(const char *source, const char *fileName, parserIncludeResolver* includeResolver, vector<const char*>* builtinVariables)
     : m_ast(nullptr)
     , m_lexer(source)
     , m_fileName(fileName)
+    , m_builtinVariables(builtinVariables)
+    , m_includeResolver(includeResolver)
 {
     m_oom = strnew("Out of memory");
     m_error = strnew("");
@@ -308,14 +310,13 @@ bool parser::isBuiltin() const {
 #undef TYPENAME
 #define TYPENAME(...)
 
-/// The parser entry point
-astTU *parser::parse(int type, vector<const char*>* builtinVariables) {
-    m_ast = new astTU(type);
+bool parser::parse(astTU* into) {
+    m_ast = into;
     m_scopes.push_back(scope());
     m_defines.push_back(defineScope());
 
-    if (builtinVariables) {
-        for (auto & i : *builtinVariables) {
+    if (m_builtinVariables) {
+        for (auto & i : *m_builtinVariables) {
             auto *define = GC_NEW astDefineStatement();
 
             define->name = strnew(i);
@@ -329,7 +330,7 @@ astTU *parser::parse(int type, vector<const char*>* builtinVariables) {
 
         if (m_lexer.error()) {
             fatal("%s", m_lexer.error());
-            return nullptr;
+            return false;
         }
 
         if (isType(kType_eof)) {
@@ -340,7 +341,7 @@ astTU *parser::parse(int type, vector<const char*>* builtinVariables) {
             if (m_token.asDirective.type == directive::kVersion) {
                 if (m_ast->versionDirective) {
                     fatal("Multiple version directives not allowed");
-                    return nullptr;
+                    return false;
                 }
                 auto *directive = GC_NEW astVersionDirective();
                 directive->version = m_token.asDirective.asVersion.version;
@@ -356,16 +357,15 @@ astTU *parser::parse(int type, vector<const char*>* builtinVariables) {
                 m_ast->nodes.push_back(extension);
                 continue;
             } else if (m_token.asDirective.type == directive::kInclude) {
-                auto* include = GC_NEW astIncludeStatement();
-                include->name = strnew(m_token.asDirective.asInclude.file);
-                m_ast->statements.push_back(include);
-                m_ast->nodes.push_back(include);
+                if (!parseIncludeDirective()) {
+                    return false;
+                }
                 continue;
             } else if (m_token.asDirective.type == directive::kDefine) {
                 astDefineStatement* define = parseDefineDirective();
 
                 if (!define) {
-                    return nullptr;
+                    return false;
                 }
 
                 m_ast->statements.push_back(define);
@@ -375,7 +375,7 @@ astTU *parser::parse(int type, vector<const char*>* builtinVariables) {
                 astIfDefDirectiveStatement *ifdef = parseIfDefDirective();
 
                 if (!ifdef) {
-                    return nullptr;
+                    return false;
                 }
 
                 m_ast->statements.push_back(ifdef);
@@ -385,7 +385,7 @@ astTU *parser::parse(int type, vector<const char*>* builtinVariables) {
                 astIfNDefDirectiveStatement *ifndef = parseIfNDefDirective();
 
                 if (!ifndef) {
-                    return nullptr;
+                    return false;
                 }
 
                 m_ast->statements.push_back(ifndef);
@@ -395,7 +395,7 @@ astTU *parser::parse(int type, vector<const char*>* builtinVariables) {
                 astIfDirectiveStatement *ifdef = parseIfDirective();
 
                 if (!ifdef) {
-                    return nullptr;
+                    return false;
                 }
 
                 m_ast->statements.push_back(ifdef);
@@ -403,13 +403,13 @@ astTU *parser::parse(int type, vector<const char*>* builtinVariables) {
                 continue;
             } else {
                 fatal("unexpected directive %d", m_token.asDirective.type);
-                return nullptr;
+                return false;
             }
         }
 
         vector<topLevel> items;
         if (!parseTopLevel(items, &m_ast->nodes))
-            return nullptr;
+            return false;
 
         if (isType(kType_semicolon)) {
             for (auto & parse : items) {
@@ -426,7 +426,7 @@ astTU *parser::parse(int type, vector<const char*>* builtinVariables) {
                 global->layoutQualifiers = parse.layoutQualifiers;
                 if (parse.initialValue) {
                     if (!(global->initialValue = evaluate(parse.initialValue)))
-                        return nullptr;
+                        return false;
                 }
                 global->isArray = parse.isArray;
                 global->arraySizes = parse.arraySizes;
@@ -437,17 +437,28 @@ astTU *parser::parse(int type, vector<const char*>* builtinVariables) {
         } else if (isOperator(kOperator_paranthesis_begin)) {
             astFunction *function = parseFunction(items.front());
             if (!function)
-                return nullptr;
+                return false;
             m_ast->functions.push_back(function);
             m_ast->nodes.push_back(function);
         } else if (isType(kType_whitespace) || isType(kType_end_of_line)) {
             continue; // whitespace tokens will be used later for the preprocessor
         } else {
             fatal("syntax error at top level %d", m_token.asKeyword);
-            return nullptr;
+            return false;
         }
     }
-    return m_ast;
+    return true;
+}
+/// The parser entry point
+astTU *parser::parse(int type) {
+    auto* tu = new astTU(type);
+
+    if (parse(tu)) {
+        return tu;
+    } else {
+        delete tu;
+        return nullptr;
+    }
 }
 
 bool parser::parseStorage(topLevel &current) {
@@ -1753,10 +1764,9 @@ bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* out, bool is_in
                     m_ast->nodes.push_back(extension);
                     continue;
                 } else if (m_token.asDirective.type == directive::kInclude) {
-                    auto* include = GC_NEW astIncludeStatement();
-                    include->name = strnew(m_token.asDirective.asInclude.file);
-                    m_ast->statements.push_back(include);
-                    m_ast->nodes.push_back(include);
+                    if (!parseIncludeDirective()) {
+                        return false;
+                    }
                     continue;
                 } else if (m_token.asDirective.type == directive::kDefine) {
                     astDefineStatement* define = parseDefineDirective();
@@ -1896,10 +1906,9 @@ bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* out, bool is_in
                         m_ast->nodes.push_back(extension);
                         continue;
                     } else if (m_token.asDirective.type == directive::kInclude) {
-                        auto* include = GC_NEW astIncludeStatement();
-                        include->name = strnew(m_token.asDirective.asInclude.file);
-                        m_ast->statements.push_back(include);
-                        m_ast->nodes.push_back(include);
+                        if (!parseIncludeDirective()) {
+                            return false;
+                        }
                         continue;
                     } else if (m_token.asDirective.type == directive::kDefine) {
                         astDefineStatement* define = parseDefineDirective();
@@ -2052,14 +2061,46 @@ astIfNDefDirectiveStatement* parser::parseIfNDefDirective(bool is_in_root) {
     }
 }
 
+bool parser::parseIncludeDirective() {
+    if (!m_includeResolver) {
+        fatal("found an include directive but no include resolver was set");
+        return false;
+    }
+
+    const char* file = m_includeResolver->resolve(m_token.asDirective.asInclude.file);
+
+    if (!file) {
+        fatal("include file '%s' not found", m_token.asDirective.asInclude.file);
+        return false;
+    }
+
+    location end = m_lexer.m_location;
+
+    // go back to the beginning of the #include directive
+
+    location begin = m_lexer.m_location;
+
+    // remove from the contents the include directive and add the new contents
+    m_lexer.m_data.erase(begin.position, end.position);
+    m_lexer.m_data.insert(begin.position, file, file + strlen(file));
+
+    // update file length with the new length
+    m_lexer.m_length = m_lexer.m_data.size();
+
+    // file can be parsed as it was being parsed
+    return true;
+}
+
 astStatement* parser::parseDirective() {
     if (m_token.asDirective.type == directive::kVersion) {
         fatal("version directive is only possible at the top level");
         return nullptr;
     } else if (m_token.asDirective.type == directive::kInclude) {
-        auto *include = GC_NEW astIncludeStatement();
-        include->name = strnew(m_token.asDirective.asInclude.file);
-        return include;
+        if (!parseIncludeDirective()) {
+            return nullptr;
+        }
+
+        return GC_NEW astEmptyStatement();
     } else if (m_token.asDirective.type == directive::kDefine) {
         return parseDefineDirective();
     } else if (m_token.asDirective.type == directive::kIf) {

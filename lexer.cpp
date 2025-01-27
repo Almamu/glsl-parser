@@ -76,12 +76,10 @@ static inline bool isSpace(int ch) {
 }
 
 lexer::lexer(const char *data)
-    : m_data(data)
-    , m_length(0)
+    : m_data(data, data + strlen(data))
+    , m_length(m_data.size())
     , m_error(nullptr)
 {
-    if (m_data)
-        m_length = strlen(m_data);
 }
 
 char lexer::at(int offset) const {
@@ -110,6 +108,8 @@ void lexer::read(token &out) {
         free(out.asIdentifier);
     else if (out.m_type == kType_directive && out.asDirective.type == directive::kExtension)
         free(out.asDirective.asExtension.name);
+    else if (out.m_type == kType_directive && out.asDirective.type == directive::kInclude)
+        free(out.asDirective.asInclude.file);
 
     // TODO: Line continuation (backslash `\'.)
     if (position() == m_length) {

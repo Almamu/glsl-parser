@@ -17,7 +17,6 @@ const char *astStatement::name() const {
     case kBreak:        return "break";
     case kReturn:       return "return";
     case kDiscard:      return "discard";
-    case kInclude:      return "include";
     case kIfDefDirective:  return "ifdef directive";
     case kIfNDefDirective: return "ifndef directive";
     case kElseDirective:  return "else directive";
@@ -136,12 +135,6 @@ astDefineStatement::astDefineStatement()
 astElseDirectiveStatement::astElseDirectiveStatement()
     : astSimpleStatement (astStatement::kElseDirective)
     , value (nullptr)
-{
-}
-
-astIncludeStatement::astIncludeStatement()
-    : astSimpleStatement (astStatement::kInclude)
-    , name (nullptr)
 {
 }
 

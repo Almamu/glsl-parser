@@ -40,10 +40,15 @@ struct topLevel {
     char *name;
 };
 
+struct parserIncludeResolver {
+    virtual const char* resolve(const char* name) = 0;
+};
+
 struct parser {
     ~parser();
-    parser(const char *source, const char *fileName);
-    [[nodiscard]] astTU *parse(int type, vector<const char*>* builtinVariables = nullptr);
+    parser(const char *source, const char *fileName, parserIncludeResolver* includeResolvers, vector<const char*>* builtinVariables = nullptr);
+    [[nodiscard]] astTU *parse(int type);
+    [[nodiscard]] bool parse(astTU* into);
 
     [[nodiscard]] const char *error() const;
 
@@ -126,6 +131,7 @@ protected:
     [[nodiscard]] astIfDefDirectiveStatement* parseIfDefDirective(bool is_in_root = true);
     [[nodiscard]] astIfNDefDirectiveStatement* parseIfNDefDirective(bool is_in_root = true);
     [[nodiscard]] astIfDirectiveStatement* parseIfDirective(bool is_in_root = true);
+    [[nodiscard]] bool parseIncludeDirective();
     [[nodiscard]] astStatement *parseDirective();
 
     astBinaryExpression *createExpression();
@@ -175,6 +181,8 @@ private:
 
     vector<astMemory> m_memory; // Memory of AST held here
     vector<char *> m_strings; // Memory of strings held here
+    vector<const char*>* m_builtinVariables;
+    parserIncludeResolver* m_includeResolver;
 };
 
 }

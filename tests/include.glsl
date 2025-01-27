@@ -1,5 +1,5 @@
-#include "test.h"
+#include "tests/include_file.h"
 
 void main() {
-#include "test.glsl"
+#include "tests/include_file.h"
 }

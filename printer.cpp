@@ -137,7 +137,6 @@ namespace glsl {
                 output("shared ");
                 break;
             default:
-                output("/* unexpected storage */");
                 break;
         }
     }
@@ -154,7 +153,6 @@ namespace glsl {
                 output("patch ");
                 break;
             default:
-                output("/* unexpected auxiliary */");
                 break;
         }
     }
@@ -179,7 +177,6 @@ namespace glsl {
                 output("highp ");
                 break;
             default:
-                output("/* unexpected precision */");
                 break;
         }
     }
@@ -549,10 +546,6 @@ namespace glsl {
         output("discard;\n");
     }
 
-    static void printInclude(astIncludeStatement* include) {
-        output("#include \"%s\"\n", include->name);
-    }
-
     static void printDefine(astDefineStatement* define) {
         output("#define %s", define->name);
 
@@ -655,8 +648,6 @@ namespace glsl {
                 return printReturnStatement((astReturnStatement*)statement);
             case astStatement::kDiscard:
                 return printDiscardStatement();
-            case astStatement::kInclude:
-                return printInclude((astIncludeStatement*)statement);
             case astStatement::kDefine:
                 return printDefine((astDefineStatement*) statement);
             case astStatement::kIfDirective:

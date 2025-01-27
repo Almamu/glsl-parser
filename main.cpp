@@ -12,9 +12,30 @@ struct sourceFile {
     int shaderType;
 };
 
+struct basicIncludeResolver : parserIncludeResolver {
+    const char* resolve(const char* name) override {
+        // TODO: THIS LEAKS MEMORY!
+        FILE* fp = fopen(name, "r");
+
+        if (!fp) {
+            return nullptr;
+        }
+
+        fseek(fp, 0, SEEK_END);
+        size_t size = ftell(fp);
+        fseek(fp, 0, SEEK_SET);
+        char* buffer = (char*)malloc(size + 1);
+        fread(buffer, 1, size, fp);
+        buffer[size] = '\0';
+        fclose(fp);
+        return buffer;
+    }
+};
+
 int main(int argc, char **argv) {
     int shaderType = -1;
     vector<sourceFile> sources;
+    basicIncludeResolver resolver;
     while (argc > 1) {
         ++argv;
         --argc;
@@ -79,8 +100,8 @@ int main(int argc, char **argv) {
         builtinVariables.push_back("gl_FragColor");
         builtinVariables.push_back("gl_Position");
         contents.push_back('\0');
-        parser p(&contents[0], source.fileName);
-        astTU *tu = p.parse(source.shaderType, &builtinVariables);
+        parser p(&contents[0], source.fileName, &resolver, &builtinVariables);
+        astTU *tu = p.parse(source.shaderType);
         if (tu) {
             std::string result = printTU(tu);
             printf("%s\n", result.c_str());

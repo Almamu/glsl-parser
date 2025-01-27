@@ -260,7 +260,6 @@ struct astStatement : astNode<astStatement> {
         kReturn,
         kDiscard,
         kDefine,
-        kInclude,
         kIfDirective,
         kElseDirective,
         kIfDefDirective,
@@ -278,11 +277,6 @@ struct astSimpleStatement : astStatement {
 struct astCompoundStatement : astStatement {
     astCompoundStatement();
     vector<astStatement*> statements;
-};
-
-struct astIncludeStatement : astSimpleStatement {
-    astIncludeStatement();
-    char* name;
 };
 
 struct astDefineStatement : astSimpleStatement {
