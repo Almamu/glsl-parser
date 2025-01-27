@@ -2084,6 +2084,9 @@ bool parser::parseIncludeDirective() {
     m_lexer.m_data.erase(begin.position, end.position);
     m_lexer.m_data.insert(begin.position, file, file + strlen(file));
 
+    // the file contents have to be freed as the include resolver should be allocating memory for it
+    free((void *) file);
+
     // update file length with the new length
     m_lexer.m_length = m_lexer.m_data.size();
 

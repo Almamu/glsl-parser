@@ -14,7 +14,6 @@ struct sourceFile {
 
 struct basicIncludeResolver : parserIncludeResolver {
     const char* resolve(const char* name) override {
-        // TODO: THIS LEAKS MEMORY!
         FILE* fp = fopen(name, "r");
 
         if (!fp) {
