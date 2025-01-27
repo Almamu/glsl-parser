@@ -67,7 +67,7 @@ protected:
 
     typedef int endCondition;
 
-    CHECK_RETURN bool next(bool ignore_eol = true, bool ignore_whitespace = true);
+    CHECK_RETURN bool next(bool ignore_eol = true, bool ignore_whitespace = true, bool eof_valid = false);
 
     CHECK_RETURN bool parseStorage(topLevel &current); // const, in, out, attribute, uniform, varying, buffer, shared
     CHECK_RETURN bool parseAuxiliary(topLevel &current); // centroid, sample, patch
@@ -78,8 +78,8 @@ protected:
     CHECK_RETURN bool parseMemory(topLevel &current); // coherent, volatile, restrict, readonly, writeonly
     CHECK_RETURN bool parseLayout(topLevel &current);
 
-    CHECK_RETURN bool parseTopLevelItem(topLevel &level, vector<astBase*>* nodes, topLevel *continuation = 0);
-    CHECK_RETURN bool parseTopLevel(vector<topLevel> &top, vector<astBase*>* nodes);
+    CHECK_RETURN bool parseTopLevelItem(topLevel &level, vector<astBase*>* nodes, topLevel *continuation = 0, bool allow_undefined = false);
+    CHECK_RETURN bool parseTopLevel(vector<topLevel> &top, vector<astBase*>* nodes, bool allow_undefined = false);
 
     CHECK_RETURN bool isType(int type) const;
     CHECK_RETURN bool isKeyword(int keyword) const;
@@ -110,7 +110,7 @@ protected:
     CHECK_RETURN astExpression *parseUnary(endCondition end, bool allow_undefined = false);
     CHECK_RETURN astExpression *parseBinary(int lhsPrecedence, astExpression *lhs, endCondition condition, bool allow_undefined = false);
     CHECK_RETURN astExpression *parseUnaryPrefix(endCondition end, bool allow_undefined = false);
-    CHECK_RETURN astConstantExpression *parseArraySize();
+    CHECK_RETURN astConstantExpression *parseArraySize(bool allow_undefined = false);
 
     // Statement parsers
     CHECK_RETURN astStatement *parseStatement(bool allow_undefined = false);

@@ -728,7 +728,7 @@ static bool isReservedKeyword(int keyword) {
         || keyword == kKeyword_using;
 }
 
-CHECK_RETURN bool parser::parseTopLevelItem(topLevel &level, vector<astBase*>* nodes, topLevel *continuation) {
+CHECK_RETURN bool parser::parseTopLevelItem(topLevel &level, vector<astBase*>* nodes, topLevel *continuation, bool allow_undefined) {
     vector<topLevel> items;
     while (!isBuiltin() && !isType(kType_identifier)) {
         // If this is an empty file don't get caught in this loop indefinitely
@@ -914,7 +914,7 @@ CHECK_RETURN bool parser::parseTopLevelItem(topLevel &level, vector<astBase*>* n
 
     while (isOperator(kOperator_bracket_begin)) {
         level.isArray = true;
-        level.arraySizes.push_back(parseArraySize());
+        level.arraySizes.push_back(parseArraySize(allow_undefined));
         if (!next()) // skip ']'
             return false;
     }
@@ -953,9 +953,9 @@ CHECK_RETURN bool parser::parseTopLevelItem(topLevel &level, vector<astBase*>* n
     return true;
 }
 
-CHECK_RETURN bool parser::parseTopLevel(vector<topLevel> &items, vector<astBase*>* nodes) {
+CHECK_RETURN bool parser::parseTopLevel(vector<topLevel> &items, vector<astBase*>* nodes, bool allow_undefined) {
     topLevel item;
-    if (!parseTopLevelItem(item, nodes))
+    if (!parseTopLevelItem(item, nodes, 0, allow_undefined))
         return false;
     if (item.type)
         items.push_back(item);
@@ -1098,7 +1098,7 @@ CHECK_RETURN astExpression *parser::parseBinary(int lhsPrecedence, astExpression
                         return 0;
                     }
                 }
-            } else if (find->type != astExpression::kDefineIdentifier) {
+            } else if (find->type != astExpression::kDefineIdentifier && (allow_undefined && find->type != astExpression::kUnknownIdentifier)) {
                 fatal("not a valid lvalue");
                 return 0;
             }
@@ -1301,17 +1301,17 @@ CHECK_RETURN astExpressionStatement *parser::parseExpressionStatement(endConditi
     return expression ? GC_NEW(astStatement) astExpressionStatement(expression) : 0;
 }
 
-CHECK_RETURN astConstantExpression *parser::parseArraySize() {
+CHECK_RETURN astConstantExpression *parser::parseArraySize(bool allow_undefined) {
     if (!next()) // skip '['
         return 0;
-    return parseExpression(kEndConditionBracket);
+    return parseExpression(kEndConditionBracket, allow_undefined);
 }
 
 CHECK_RETURN astCompoundStatement *parser::parseCompoundStatement() {
     astCompoundStatement *statement = GC_NEW(astStatement) astCompoundStatement();
     if (!next()) // skip '{'
         return 0;
-    while (!isType(kType_scope_end) && !(isType(kType_directive) && (m_token.asDirective.type == directive::kEndIf || m_token.asDirective.type == directive::kElse))) {
+    while (!isType(kType_scope_end) && !(isType(kType_directive) && (m_token.asDirective.type == directive::kEndIf || m_token.asDirective.type == directive::kElse || m_token.asDirective.type == directive::kElIf))) {
         astStatement *nextStatement = parseStatement();
         if (!nextStatement) return 0;
         statement->statements.push_back(nextStatement);
@@ -1731,8 +1731,80 @@ CHECK_RETURN bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* ou
         // top level parsing has some issues as it doesn't accept statements
         vector<topLevel> items;
         if (is_in_root) {
+            // directives have to be handled like in the root too
+            if (isType(kType_directive)) {
+                if (m_token.asDirective.type == directive::kVersion) {
+                    if (m_ast->versionDirective) {
+                        fatal("Multiple version directives not allowed");
+                        return 0;
+                    }
+                    astVersionDirective *directive = GC_NEW(astVersionDirective) astVersionDirective();
+                    directive->version = m_token.asDirective.asVersion.version;
+                    directive->type = m_token.asDirective.asVersion.type;
+                    m_ast->versionDirective = directive;
+                    m_ast->nodes.push_back(directive);
+                    continue;
+                } else if (m_token.asDirective.type == directive::kExtension) {
+                    astExtensionDirective *extension = GC_NEW(astExtensionDirective) astExtensionDirective();
+                    extension->behavior = m_token.asDirective.asExtension.behavior;
+                    extension->name = strnew(m_token.asDirective.asExtension.name);
+                    m_ast->extensionDirectives.push_back(extension);
+                    m_ast->nodes.push_back(extension);
+                    continue;
+                } else if (m_token.asDirective.type == directive::kInclude) {
+                    astIncludeStatement* include = GC_NEW(astIncludeStatement) astIncludeStatement();
+                    include->name = strnew(m_token.asDirective.asInclude.file);
+                    m_ast->statements.push_back(include);
+                    m_ast->nodes.push_back(include);
+                    continue;
+                } else if (m_token.asDirective.type == directive::kDefine) {
+                    astDefineStatement* define = parseDefineDirective();
+
+                    if (!define) {
+                        return 0;
+                    }
+
+                    m_ast->statements.push_back(define);
+                    m_ast->nodes.push_back(define);
+                    continue;
+                } else if (m_token.asDirective.type == directive::kIfDef) {
+                    astIfDefDirectiveStatement *ifdef = parseIfDefDirective();
+
+                    if (!ifdef) {
+                        return 0;
+                    }
+
+                    m_ast->statements.push_back(ifdef);
+                    m_ast->nodes.push_back(ifdef);
+                    continue;
+                } else if (m_token.asDirective.type == directive::kIfNDef) {
+                    astIfNDefDirectiveStatement *ifndef = parseIfNDefDirective();
+
+                    if (!ifndef) {
+                        return 0;
+                    }
+
+                    m_ast->statements.push_back(ifndef);
+                    m_ast->nodes.push_back(ifndef);
+                    continue;
+                } else if (m_token.asDirective.type == directive::kIf) {
+                    astIfDirectiveStatement *ifdef = parseIfDirective();
+
+                    if (!ifdef) {
+                        return 0;
+                    }
+
+                    m_ast->statements.push_back(ifdef);
+                    m_ast->nodes.push_back(ifdef);
+                    continue;
+                } else {
+                    fatal("unexpected directive %d", m_token.asDirective.type);
+                    return 0;
+                }
+            }
+
             // top level parsing might fail here and it's okay?
-            if (!parseTopLevel(items, &out->thenNodes)) {
+            if (!parseTopLevel(items, &out->thenNodes, true)) {
                 return false;
             }
         }
@@ -1803,6 +1875,77 @@ CHECK_RETURN bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* ou
             vector<topLevel> items;
 
             if (is_in_root) {
+                // directives have to be handled like in the root too
+                if (isType(kType_directive)) {
+                    if (m_token.asDirective.type == directive::kVersion) {
+                        if (m_ast->versionDirective) {
+                            fatal("Multiple version directives not allowed");
+                            return 0;
+                        }
+                        astVersionDirective *directive = GC_NEW(astVersionDirective) astVersionDirective();
+                        directive->version = m_token.asDirective.asVersion.version;
+                        directive->type = m_token.asDirective.asVersion.type;
+                        m_ast->versionDirective = directive;
+                        m_ast->nodes.push_back(directive);
+                        continue;
+                    } else if (m_token.asDirective.type == directive::kExtension) {
+                        astExtensionDirective *extension = GC_NEW(astExtensionDirective) astExtensionDirective();
+                        extension->behavior = m_token.asDirective.asExtension.behavior;
+                        extension->name = strnew(m_token.asDirective.asExtension.name);
+                        m_ast->extensionDirectives.push_back(extension);
+                        m_ast->nodes.push_back(extension);
+                        continue;
+                    } else if (m_token.asDirective.type == directive::kInclude) {
+                        astIncludeStatement* include = GC_NEW(astIncludeStatement) astIncludeStatement();
+                        include->name = strnew(m_token.asDirective.asInclude.file);
+                        m_ast->statements.push_back(include);
+                        m_ast->nodes.push_back(include);
+                        continue;
+                    } else if (m_token.asDirective.type == directive::kDefine) {
+                        astDefineStatement* define = parseDefineDirective();
+
+                        if (!define) {
+                            return 0;
+                        }
+
+                        m_ast->statements.push_back(define);
+                        m_ast->nodes.push_back(define);
+                        continue;
+                    } else if (m_token.asDirective.type == directive::kIfDef) {
+                        astIfDefDirectiveStatement *ifdef = parseIfDefDirective();
+
+                        if (!ifdef) {
+                            return 0;
+                        }
+
+                        m_ast->statements.push_back(ifdef);
+                        m_ast->nodes.push_back(ifdef);
+                        continue;
+                    } else if (m_token.asDirective.type == directive::kIfNDef) {
+                        astIfNDefDirectiveStatement *ifndef = parseIfNDefDirective();
+
+                        if (!ifndef) {
+                            return 0;
+                        }
+
+                        m_ast->statements.push_back(ifndef);
+                        m_ast->nodes.push_back(ifndef);
+                        continue;
+                    } else if (m_token.asDirective.type == directive::kIf) {
+                        astIfDirectiveStatement *ifdef = parseIfDirective();
+
+                        if (!ifdef) {
+                            return 0;
+                        }
+
+                        m_ast->statements.push_back(ifdef);
+                        m_ast->nodes.push_back(ifdef);
+                        continue;
+                    } else {
+                        fatal("unexpected directive %d", m_token.asDirective.type);
+                        return 0;
+                    }
+                }
                 // top level parsing might fail here and it's okay?
                 if (!parseTopLevel(items, &out->thenNodes)) {
                     return false;
@@ -1855,8 +1998,13 @@ CHECK_RETURN bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* ou
         return false;
     }
 
+    if (!next(false, true, true)) {
+        return false;
+    }
+
     // always add it on the else nodes as this simplifies parsing things
     out->elseNodes.push_back(GC_NEW(astStatement) astEndIfDirectiveStatement());
+
     return true;
 }
 
@@ -2171,9 +2319,9 @@ CHECK_RETURN astFunctionCall *parser::parseFunctionCall(bool allow_undefined) {
     return expression;
 }
 
-CHECK_RETURN bool parser::next(bool ignore_eol, bool ignore_whitespace) {
+CHECK_RETURN bool parser::next(bool ignore_eol, bool ignore_whitespace, bool eof_valid) {
     m_lexer.read(m_token, true, ignore_eol, ignore_whitespace);
-    if (isType(kType_eof)) {
+    if (!eof_valid && isType(kType_eof)) {
         fatal("premature end of file");
         return false;
     }
