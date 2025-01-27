@@ -479,7 +479,7 @@ void lexer::read(token &out) {
         case '\v':
         case '\r':
         case ' ':
-            skipWhitespace(true);
+            skipWhitespace(false);
             out.m_type = kType_whitespace; // Whitespace already skipped.
             break;
         case ';':
