@@ -1,6 +1,6 @@
 #pragma once
 
-#include <stdarg.h> // va_list
+#include <cstdarg> // va_list
 #include <vector>
 
 namespace glsl {
@@ -23,8 +23,8 @@ int allocfmt(char **str, const char *fmt, ...);
 // a tiny wrapper around std::vector so you can provide your own
 template <typename T>
 struct vector {
-    size_t size() const { return m_data.size(); }
-    bool empty() const { return m_data.empty(); }
+    [[nodiscard]] size_t size() const { return m_data.size(); }
+    [[nodiscard]] bool empty() const { return m_data.empty(); }
     const T& operator[](size_t index) const { return m_data[index]; }
     T& operator[](size_t index) { return m_data[index]; }
     T* begin() { return &m_data[0]; }
@@ -43,7 +43,7 @@ struct vector {
     T &back() { return *(end() - 1); }
     const T& back() const { return *(end() - 1); }
     void resize(size_t size) { m_data.resize(size); }
-    vector(std::vector<T> base) : m_data(base) {};
+    explicit vector(std::vector<T> base) : m_data(base) {};
     vector() : m_data() {};
 private:
     std::vector<T> m_data;

@@ -1055,21 +1055,21 @@ astInterfaceBlock *parser::parseInterfaceBlock(int storage) {
     return unique;
 }
 
-astExpression *parser::parseBinary(int lhsPrecedence, astExpression *lhs, endCondition end, bool allow_undefined) {
+astExpression *parser::parseBinary(int lhsPrecedence, astExpression *lhs, endCondition condition, bool allow_undefined) {
     // Precedence climbing
-    while (!isEndCondition(end)) {
+    while (!isEndCondition(condition)) {
         int binaryPrecedence = m_token.precedence();
         if (binaryPrecedence < lhsPrecedence)
             break;
 
         astBinaryExpression *expression = createExpression();
-        if (!next(!(end & kEndConditionLineFeed)))
+        if (!next(!(condition & kEndConditionLineFeed)))
             return nullptr;
 
-        astExpression *rhs = parseUnary(end, allow_undefined);
+        astExpression *rhs = parseUnary(condition, allow_undefined);
         if (!rhs)
             return nullptr;
-        if (!next(!(end & kEndConditionLineFeed)))
+        if (!next(!(condition & kEndConditionLineFeed)))
             return nullptr;
 
         if (((astExpression*)expression)->type == astExpression::kAssign) {
@@ -1106,7 +1106,7 @@ astExpression *parser::parseBinary(int lhsPrecedence, astExpression *lhs, endCon
 
         // climb
         if (binaryPrecedence < rhsPrecedence) {
-            if (!(rhs = parseBinary(binaryPrecedence + 1, rhs, end, allow_undefined)))
+            if (!(rhs = parseBinary(binaryPrecedence + 1, rhs, condition, allow_undefined)))
                 return nullptr;
         }
 
@@ -1206,12 +1206,12 @@ astType* parser::getType(astExpression *expression)
     return nullptr;
 }
 
-astExpression *parser::parseUnary(endCondition end, bool allow_undefined) {
-    astExpression *operand = parseUnaryPrefix(end, allow_undefined);
+astExpression *parser::parseUnary(endCondition condition, bool allow_undefined) {
+    astExpression *operand = parseUnaryPrefix(condition, allow_undefined);
     if (!operand)
         return nullptr;
     for (;;) {
-        token peek = m_lexer.peek(!(end & kEndConditionLineFeed));
+        token peek = m_lexer.peek(!(condition & kEndConditionLineFeed));
         if (IS_OPERATOR(peek, kOperator_dot)) {
             if (!next()) return nullptr; // skip last
             if (!next()) return nullptr; // skip '.'
@@ -1276,7 +1276,7 @@ astExpression *parser::parseUnary(endCondition end, bool allow_undefined) {
                 return nullptr;
             }
             if (!next()) return nullptr; // skip ':'
-            if (!(expression->onFalse = parseUnary(end))) {
+            if (!(expression->onFalse = parseUnary(condition))) {
                 fatal("expected expression after `:' in ternary statement");
                 return nullptr;
             }
@@ -1299,7 +1299,7 @@ astExpression *parser::parseExpression(endCondition condition, bool allow_undefi
 
 astExpressionStatement *parser::parseExpressionStatement(endCondition condition, bool allow_undefined) {
     astExpression *expression = parseExpression(condition, allow_undefined);
-    return expression ? GC_NEW astExpressionStatement(expression) : 0;
+    return expression ? GC_NEW astExpressionStatement(expression) : nullptr;
 }
 
 astConstantExpression *parser::parseArraySize(bool allow_undefined) {
@@ -1617,7 +1617,7 @@ astDeclarationStatement *parser::parseDeclarationStatement(endCondition conditio
             return nullptr;
         }
 
-        astExpression *initialValue = 0;
+        astExpression *initialValue = nullptr;
         if (isOperator(kOperator_assign)) {
             if (!next()) // skip '='
                 return nullptr;
@@ -2377,9 +2377,9 @@ astBinaryExpression *parser::createExpression() {
     }
 }
 
-astType *parser::findType(const char *name) {
+astType *parser::findType(const char *identifier) {
     for (auto & structure : m_ast->structures) {
-        if (strcmp(structure->name, name) != 0)
+        if (strcmp(structure->name, identifier) != 0)
             continue;
         return (astType*)structure;
     }
@@ -2397,11 +2397,11 @@ astVariable *parser::findVariable(const char *identifier) {
     return nullptr;
 }
 
-astDefineStatement *parser::findDefine(const char* identifier) {
+astDefineStatement *parser::findDefine(const char* define) {
     for (size_t scopeIndex = m_defines.size(); scopeIndex > 0; scopeIndex--) {
         vector<astDefineStatement*> &s = m_defines[scopeIndex - 1];
         for (auto & variableIndex : s) {
-            if (!strcmp(variableIndex->name, identifier))
+            if (!strcmp(variableIndex->name, define))
                 return variableIndex;
         }
     }

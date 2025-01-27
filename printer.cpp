@@ -45,7 +45,7 @@ namespace glsl {
 
     static void printExpression(astExpression *expression);
     static void printStatement(astStatement *statement);
-    static void printNodes(vector<astBase*> nodes);
+    static void printNodes(const vector<astBase*>& nodes);
 
     static void printBuiltin(astBuiltin *builtin) {
         output("%s", kTypes[builtin->type]);
@@ -84,9 +84,9 @@ namespace glsl {
     }
 
     static void printArraySize(const vector<astConstantExpression*> &arraySizes) {
-        for (size_t i = 0; i < arraySizes.size(); i++) {
+        for (auto arraySize : arraySizes) {
             output("[");
-            printExpression(arraySizes[i]);
+            printExpression(arraySize);
             output("]");
         }
     }
@@ -136,6 +136,9 @@ namespace glsl {
             case kShared:
                 output("shared ");
                 break;
+            default:
+                output("/* unexpected storage */");
+                break;
         }
     }
 
@@ -149,6 +152,9 @@ namespace glsl {
                 break;
             case kPatch:
                 output("patch ");
+                break;
+            default:
+                output("/* unexpected auxiliary */");
                 break;
         }
     }
@@ -172,12 +178,15 @@ namespace glsl {
             case kHighp:
                 output("highp ");
                 break;
+            default:
+                output("/* unexpected precision */");
+                break;
         }
     }
 
     static void printGlobalVariable(astGlobalVariable *variable) {
         vector<astLayoutQualifier*> &qualifiers = variable->layoutQualifiers;
-        if (variable->layoutQualifiers.size()) {
+        if (!variable->layoutQualifiers.empty()) {
             output("layout (");
             for (size_t i = 0; i < qualifiers.size(); i++) {
                 astLayoutQualifier *qualifier = qualifiers[i];
@@ -408,8 +417,8 @@ namespace glsl {
 
     static void printCompoundStatement(astCompoundStatement *statement) {
         output(" {\n");
-        for (size_t i = 0; i < statement->statements.size(); i++)
-            printStatement(statement->statements[i]);
+        for (auto & i : statement->statements)
+            printStatement(i);
         output("}\n");
     }
 
@@ -418,8 +427,8 @@ namespace glsl {
     }
 
     static void printDeclarationStatement(astDeclarationStatement *statement, int flags = kDefault) {
-        for (size_t i = 0; i < statement->variables.size(); i++)
-            printFunctionVariable(statement->variables[i], flags);
+        for (auto & variable : statement->variables)
+            printFunctionVariable(variable, flags);
     }
 
     static void printExpressionStatement(astExpressionStatement *statement, int flags = kDefault) {
@@ -445,8 +454,8 @@ namespace glsl {
         output("switch(");
         printExpression(statement->expression);
         output(") {\n");
-        for (size_t i = 0; i < statement->statements.size(); i++)
-            printStatement(statement->statements[i]);
+        for (auto & i : statement->statements)
+            printStatement(i);
         output("}\n");
     }
 
@@ -679,16 +688,16 @@ namespace glsl {
     static void printFunction(astFunction *function) {
         printType(function->returnType);
         output(" %s(", function->name);
-        for (size_t i = 0; i < function->parameters.size(); i++)
-            printFunctionParameter(function->parameters[i]);
+        for (auto & parameter : function->parameters)
+            printFunctionParameter(parameter);
         output(")");
         if (function->isPrototype) {
             output(";\n");
             return;
         }
         output(" {\n");
-        for (size_t i = 0; i < function->statements.size(); i++)
-            printStatement(function->statements[i]);
+        for (auto & statement : function->statements)
+            printStatement(statement);
         output("}\n");
     }
 
@@ -697,8 +706,8 @@ namespace glsl {
         if (structure->name)
             output("%s ", structure->name);
         output("{\n");
-        for (size_t i = 0; i < structure->fields.size(); i++) {
-            printVariable(structure->fields[i]);
+        for (auto & field : structure->fields) {
+            printVariable(field);
             output(";\n");
         }
         output("};\n");
@@ -708,8 +717,8 @@ namespace glsl {
         printStorage(block->storage);
         output("%s ", block->name);
         output("{\n");
-        for (size_t i = 0; i < block->fields.size(); i++) {
-            printVariable(block->fields[i]);
+        for (auto & field : block->fields) {
+            printVariable(field);
             output(";\n");
         }
         output("};\n");
@@ -748,13 +757,11 @@ namespace glsl {
         }
     }
 
-    void printNodes(vector<astBase*> nodes) {
-        for (size_t i = 0; i < nodes.size(); i++) {
-            astBase* el = nodes[i];
-
+    void printNodes(const vector<astBase*>& nodes) {
+        for (auto el : nodes) {
             switch (el->astType) {
                 case astBase::kType: {
-                    astType* type = (astType*) el;
+                    auto* type = (astType*) el;
 
                     if (type->typeType == astType::kBuiltin) {
                         output("// not printing a builtin type inside of a tu node\n");
@@ -773,7 +780,7 @@ namespace glsl {
                 }
                     break;
                 case astBase::kVariable: {
-                    astVariable* variable = (astVariable*) el;
+                    auto* variable = (astVariable*) el;
 
                     if (variable->type != astVariable::kGlobal) {
                         output("// not printing a non-global variable inside of a tu node\n");

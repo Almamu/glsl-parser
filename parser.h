@@ -1,5 +1,7 @@
-#ifndef PARSE_HDR
-#define PARSE_HDR
+#pragma once
+
+#include <memory.h>
+
 #include "lexer.h"
 #include "ast.h"
 
@@ -12,8 +14,8 @@ struct topLevel {
         , memory(0)
         , precision(-1)
         , interpolation(-1)
-        , type(0)
-        , initialValue(0)
+        , type(nullptr)
+        , initialValue(nullptr)
         , arrayOnTypeOffset(0)
         , isInvariant(false)
         , isPrecise(false)
@@ -41,7 +43,7 @@ struct topLevel {
 struct parser {
     ~parser();
     parser(const char *source, const char *fileName);
-    [[nodiscard]] astTU *parse(int type, vector<const char*>* builtinVariables = 0);
+    [[nodiscard]] astTU *parse(int type, vector<const char*>* builtinVariables = nullptr);
 
     [[nodiscard]] const char *error() const;
 
@@ -68,8 +70,8 @@ protected:
     [[nodiscard]] bool parseMemory(topLevel &current); // coherent, volatile, restrict, readonly, writeonly
     [[nodiscard]] bool parseLayout(topLevel &current);
 
-    [[nodiscard]] bool parseTopLevelItem(topLevel &level, vector<astBase*>* nodes, topLevel *continuation = 0, bool allow_undefined = false);
-    [[nodiscard]] bool parseTopLevel(vector<topLevel> &top, vector<astBase*>* nodes, bool allow_undefined = false);
+    [[nodiscard]] bool parseTopLevelItem(topLevel &level, vector<astBase*>* nodes, topLevel *continuation = nullptr, bool allow_undefined = false);
+    [[nodiscard]] bool parseTopLevel(vector<topLevel> &items, vector<astBase*>* nodes, bool allow_undefined = false);
 
     [[nodiscard]] bool isType(int type) const;
     [[nodiscard]] bool isKeyword(int keyword) const;
@@ -96,10 +98,10 @@ protected:
     [[nodiscard]] astFunctionCall *parseFunctionCall(bool allow_undefined = false);
 
     // Expression parsers
-    [[nodiscard]] astExpression *parseExpression(endCondition end, bool allow_undefined = false);
-    [[nodiscard]] astExpression *parseUnary(endCondition end, bool allow_undefined = false);
+    [[nodiscard]] astExpression *parseExpression(endCondition condition, bool allow_undefined = false);
+    [[nodiscard]] astExpression *parseUnary(endCondition condition, bool allow_undefined = false);
     [[nodiscard]] astExpression *parseBinary(int lhsPrecedence, astExpression *lhs, endCondition condition, bool allow_undefined = false);
-    [[nodiscard]] astExpression *parseUnaryPrefix(endCondition end, bool allow_undefined = false);
+    [[nodiscard]] astExpression *parseUnaryPrefix(endCondition condition, bool allow_undefined = false);
     [[nodiscard]] astConstantExpression *parseArraySize(bool allow_undefined = false);
 
     // Statement parsers
@@ -150,16 +152,16 @@ private:
     char *m_oom;
     const char *m_fileName;
 
-    void strdel(char **what) {
+    static void strdel(char **what) {
         if (!*what)
             return;
         free(*what);
-        *what = 0;
+        *what = nullptr;
     }
 
     char *strnew(const char *what) {
         if (!what)
-            return 0;
+            return nullptr;
         size_t length = strlen(what) + 1;
         char *copy = (char*)malloc(length);
         memcpy(copy, what, length);
@@ -167,7 +169,7 @@ private:
         return copy;
     }
 
-    bool strnil(const char *what) {
+    static bool strnil(const char *what) {
         return !what || !*what;
     }
 
@@ -176,5 +178,3 @@ private:
 };
 
 }
-
-#endif
