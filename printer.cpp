@@ -799,6 +799,11 @@ namespace glsl {
     std::string printTU(astTU *tu) {
         printNodes(tu->nodes);
 
-        return buffer;
+        std::string result(buffer);
+
+        // reset buffer so it can be used again later
+        buffer = "";
+
+        return result;
     }
 }
