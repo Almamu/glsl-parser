@@ -1980,7 +1980,7 @@ bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* out, bool is_in
                     return false;
                 out->elseNodes.push_back(function);
             } else {
-                astStatement* statement = parseStatement();
+                astStatement* statement = parseStatement(true);
                 if (!statement)
                     return false;
                 out->elseNodes.push_back(statement);
