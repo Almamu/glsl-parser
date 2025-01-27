@@ -1,4 +1,5 @@
 #include <cstring> // strcmp, memcpy
+#include <string>
 
 #include "parser.h"
 #include "util.h"
@@ -2067,6 +2068,10 @@ bool parser::parseIncludeDirective() {
     location end = m_lexer.m_location;
 
     // go back to the beginning of the #include directive
+    // should be the previous # character
+    while (m_lexer.m_data[m_lexer.m_location.position] != '#') {
+        m_lexer.m_location.position --;
+    }
 
     location begin = m_lexer.m_location;
 
