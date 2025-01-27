@@ -1260,7 +1260,7 @@ astExpression *parser::parseUnary(endCondition condition, bool allow_undefined) 
                 return nullptr;
             }
             expression->operand = operand;
-            if (!(expression->index = parseExpression(kEndConditionBracket)))
+            if (!(expression->index = parseExpression(kEndConditionBracket, allow_undefined)))
                 return nullptr;
             if (isConstant(expression->index)) {
                 if (!(expression->index = evaluate(expression->index)))
@@ -1278,7 +1278,7 @@ astExpression *parser::parseUnary(endCondition condition, bool allow_undefined) 
                 return nullptr;
             }
             if (!next()) return nullptr; // skip ':'
-            if (!(expression->onFalse = parseUnary(condition))) {
+            if (!(expression->onFalse = parseUnary(condition, allow_undefined))) {
                 fatal("expected expression after `:' in ternary statement");
                 return nullptr;
             }
