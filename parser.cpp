@@ -2069,7 +2069,7 @@ bool parser::parseIncludeDirective() {
 
     // go back to the beginning of the #include directive
     // should be the previous # character
-    while (m_lexer.m_data[m_lexer.m_location.position] != '#') {
+    while (m_lexer.at() != '#') {
         m_lexer.m_location.position --;
     }
 
