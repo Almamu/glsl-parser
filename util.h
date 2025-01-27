@@ -43,6 +43,7 @@ struct vector {
     T &back() { return *(end() - 1); }
     const T& back() const { return *(end() - 1); }
     void resize(size_t size) { m_data.resize(size); }
+    vector(std::vector<T> base) : m_data(base) {};
 private:
     std::vector<T> m_data;
 };
