@@ -1939,7 +1939,7 @@ bool parser::parseIfDirectiveVariations(astIfDirectiveStatement* out, bool is_in
                     }
                 }
                 // top level parsing might fail here and it's okay?
-                if (!parseTopLevel(items, &out->thenNodes)) {
+                if (!parseTopLevel(items, &out->elseNodes)) {
                     return false;
                 }
             }
