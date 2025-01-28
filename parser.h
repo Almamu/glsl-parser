@@ -156,6 +156,7 @@ private:
     char *m_error;
     char *m_oom;
     const char *m_fileName;
+    bool m_mainFound;
 
     static void strdel(char **what) {
         if (!*what)

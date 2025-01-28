@@ -76,7 +76,7 @@ static inline bool isSpace(int ch) {
 }
 
 lexer::lexer(const char *data)
-    : m_data(data, data + strlen(data))
+    : m_data(data)
     , m_length(m_data.size())
     , m_error(nullptr)
 {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include "util.h"
 
 namespace glsl {
@@ -162,7 +163,7 @@ protected:
     vector<char> readNumeric(bool isOctal, bool isHex);
 
 private:
-    vector<char> m_data;
+    std::string m_data;
     size_t m_length;
     const char *m_error;
     location m_location;

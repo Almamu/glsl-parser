@@ -10,6 +10,7 @@ parser::parser(const char *source, const char *fileName, parserIncludeResolver* 
     : m_ast(nullptr)
     , m_lexer(source)
     , m_fileName(fileName)
+    , m_mainFound(false)
     , m_builtinVariables(builtinVariables)
     , m_includeResolver(includeResolver)
 {
@@ -2049,6 +2050,10 @@ bool parser::parseIncludeDirective() {
         fatal("found an include directive but no include resolver was set");
         return false;
     }
+    if (m_mainFound) {
+        fatal("includes must come before the void main");
+        return false;
+    }
 
     const char* file = m_includeResolver->resolve(m_token.asDirective.asInclude.file);
 
@@ -2068,8 +2073,27 @@ bool parser::parseIncludeDirective() {
     location begin = m_lexer.m_location;
 
     // remove from the contents the include directive and add the new contents
-    m_lexer.m_data.erase(begin.position, end.position);
-    m_lexer.m_data.insert(begin.position, file, file + strlen(file));
+    m_lexer.m_data.erase(begin.position, end.position - begin.position);
+    size_t position = m_lexer.m_data.find("void main");
+
+    if (position != std::string::npos) {
+        // is there a marker about the include section?
+        size_t marker = m_lexer.m_data.find("// __INCLUDE_SECTION__");
+
+        if (marker == std::string::npos) {
+            // add the marker that'll be used for later includes
+            m_lexer.m_data.insert(position, "// __INCLUDE_SECTION__\n");
+            // find it again to place the include in the right place
+            marker = m_lexer.m_data.find("// __INCLUDE_SECTION__") + std::string("// __INCLUDE_SECTION__\n").size();
+        } else if (marker < begin.position) {
+            // we're past the marker, add the content's in place instead
+            marker = begin.position;
+        }
+
+        if (marker != std::string::npos) {
+            m_lexer.m_data.insert(marker, std::string(file) + "\n");
+        }
+    }
 
     // the file contents have to be freed as the include resolver should be allocating memory for it
     free((void *) file);
@@ -2169,6 +2193,8 @@ astFunction *parser::parseFunction(const topLevel &parse) {
                 parameter->storage = kOut;
             } else if (isKeyword(kKeyword_inout)) {
                 parameter->storage = kInOut;
+            } else if (isKeyword(kKeyword_const)) {
+                parameter->storage = kConst;
             } else if (isKeyword(kKeyword_highp)) {
                 parameter->precision = kHighp;
             } else if (isKeyword(kKeyword_mediump)) {
@@ -2235,6 +2261,7 @@ astFunction *parser::parseFunction(const topLevel &parse) {
     // "It is a compile-time or link-time error to declare or define a function main with any other parameters or
     //  return type."
     if (!strcmp(function->name, "main")) {
+        m_mainFound = true;
         if (!function->parameters.empty()) {
             fatal("`main' cannot have parameters");
             return nullptr;
