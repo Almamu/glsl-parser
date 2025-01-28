@@ -1256,7 +1256,7 @@ astExpression *parser::parseUnary(endCondition condition, bool allow_undefined) 
             astExpression *find = operand;
             while (find->type == astExpression::kArraySubscript)
                 find = ((astArraySubscript*)find)->operand;
-            if (find->type != astExpression::kVariableIdentifier) {
+            if (find->type != astExpression::kVariableIdentifier && find->type != astExpression::kDefineIdentifier && (allow_undefined && find->type != astExpression::kUnknownIdentifier)) {
                 fatal("cannot be subscripted");
                 return nullptr;
             }
