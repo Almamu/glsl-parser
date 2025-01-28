@@ -1,4 +1,4 @@
 #define TEST
 void main() {
-;#define TEST
+;	#define TEST
 }
