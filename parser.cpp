@@ -82,7 +82,8 @@ bool parser::isConstantValue(astExpression *expression) {
            expression->type == astExpression::kUIntConstant ||
            expression->type == astExpression::kFloatConstant ||
            expression->type == astExpression::kDoubleConstant ||
-           expression->type == astExpression::kBoolConstant;
+           expression->type == astExpression::kBoolConstant ||
+           expression->type == astExpression::kConstructorCall;
 }
 
 #define ICONST(X) ((astIntConstant*)(X))
